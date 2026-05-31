@@ -20,6 +20,9 @@ import {
   Edit3,
   Columns,
   HelpCircle,
+  Info,
+  ExternalLink,
+  X,
 } from "lucide-react";
 import { FileLoader } from "./components/FileLoader";
 import { MarkdownViewer } from "./components/MarkdownViewer";
@@ -31,12 +34,17 @@ import {
   RecentFile,
   saveRecentFile,
   deleteRecentFile,
+  updateRecentFilePath,
+  createFileId,
 } from "./utils/recentFiles";
 
 type LoadedFile = {
+  id?: string;
   name: string;
+  path?: string;
   size: number;
   content: string;
+  lastModified?: number;
 };
 
 type Theme =
@@ -63,6 +71,31 @@ const languageOptions: Array<{ value: Language; label: string; nativeLabel: stri
   { value: "en", label: "English", nativeLabel: "English" },
   { value: "th", label: "Thai", nativeLabel: "ไทย" },
 ];
+
+const appVersion = "0.1.0";
+const githubUrl = "https://github.com/chatchai98/Markdown-Viewer";
+const appCreator = "chatchai98";
+const copyrightYear = "2026";
+
+function getDisplayPath(file: File, handle?: FileSystemFileHandle | null) {
+  const fileWithPath = file as File & { path?: string };
+  return fileWithPath.path || file.webkitRelativePath || undefined;
+}
+
+function getDistinctPath(path: string | undefined, name: string) {
+  return path && path !== name ? path : undefined;
+}
+
+function formatDateTime(timestamp: number | undefined) {
+  if (!timestamp) {
+    return null;
+  }
+
+  return new Date(timestamp).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
 
 const translations = {
   en: {
@@ -94,6 +127,14 @@ const translations = {
     settings: "Settings",
     settingsTitle: "Settings",
     settingsHeader: "Settings",
+    about: "About",
+    aboutTitle: "About Markdown Viewer",
+    aboutDescription: "A local-first Markdown viewer and editor for reading, editing, previewing, and printing Markdown files safely in the browser.",
+    creator: "Creator",
+    version: "Version",
+    copyright: "Copyright",
+    github: "GitHub",
+    close: "Close",
     language: "Language",
     theme: "Theme",
     darkThemes: "Dark Themes",
@@ -121,6 +162,18 @@ const translations = {
     readFailed: "Could not read this file.",
     saveDirectFailed: "Could not save the file directly. Try Save As.",
     markdownFiles: "Markdown Files",
+    location: "Location",
+    editLocation: "Edit location/project",
+    editLocationPlaceholder: "Enter file path or project name...",
+    noLocation: "No location set (click to edit)",
+    saveLocation: "Save location",
+    cancelLocation: "Cancel",
+    syncLive: "Live sync",
+    syncedFromDisk: "File updated from disk.",
+    externalChangeConflict: "The file changed on disk, but you have unsaved edits. Save or reopen the file before continuing.",
+    opened: "Opened",
+    modified: "Modified",
+    modifiedUnknown: "Modified time unavailable",
     words: "words",
     minRead: "min read",
     fileLoader: {
@@ -186,6 +239,14 @@ const translations = {
     settings: "ตั้งค่า",
     settingsTitle: "ตั้งค่า",
     settingsHeader: "ตั้งค่า",
+    about: "เกี่ยวกับ",
+    aboutTitle: "เกี่ยวกับ Markdown Viewer",
+    aboutDescription: "แอปอ่านและแก้ไข Markdown แบบ local-first สำหรับอ่าน แก้ไข พรีวิว และพิมพ์ไฟล์ Markdown อย่างปลอดภัยในเบราว์เซอร์",
+    creator: "ผู้สร้าง",
+    version: "เวอร์ชัน",
+    copyright: "ลิขสิทธิ์",
+    github: "GitHub",
+    close: "ปิด",
     language: "ภาษา",
     theme: "ธีม",
     darkThemes: "ธีมมืด",
@@ -213,6 +274,18 @@ const translations = {
     readFailed: "ไม่สามารถอ่านไฟล์นี้ได้",
     saveDirectFailed: "ไม่สามารถบันทึกไฟล์โดยตรงได้ ลองใช้บันทึกเป็น",
     markdownFiles: "ไฟล์ Markdown",
+    location: "ตำแหน่ง",
+    editLocation: "แก้ไขตำแหน่ง/โปรเจค",
+    editLocationPlaceholder: "ระบุพาธของไฟล์หรือชื่อโปรเจค...",
+    noLocation: "ยังไม่มีตำแหน่ง (คลิกเพื่อแก้ไข)",
+    saveLocation: "บันทึกตำแหน่ง",
+    cancelLocation: "ยกเลิก",
+    syncLive: "ซิงก์สด",
+    syncedFromDisk: "อัปเดตไฟล์จากดิสก์แล้ว",
+    externalChangeConflict: "ไฟล์บนดิสก์ถูกแก้ไข แต่คุณมีงานที่ยังไม่ได้บันทึก กรุณาบันทึกหรือเปิดไฟล์ใหม่ก่อนทำต่อ",
+    opened: "เปิดล่าสุด",
+    modified: "แก้ไขล่าสุด",
+    modifiedUnknown: "ไม่พบเวลาแก้ไข",
     words: "คำ",
     minRead: "นาทีในการอ่าน",
     fileLoader: {
@@ -264,6 +337,7 @@ function App() {
   const [copiedRaw, setCopiedRaw] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   
   const headerInputRef = useRef<HTMLInputElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
@@ -324,8 +398,64 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [loadedFile, editContent, fileHandle]);
 
+  useEffect(() => {
+    if (!loadedFile || !fileHandle) {
+      return;
+    }
+
+    const activeFile = loadedFile;
+    const activeHandle = fileHandle;
+    let isCurrent = true;
+
+    async function syncExternalChanges() {
+      try {
+        const diskFile = await activeHandle.getFile();
+        if (!isCurrent || diskFile.lastModified === activeFile.lastModified) {
+          return;
+        }
+
+        const nextContent = await diskFile.text();
+        const nextFile = {
+          id: activeFile.id,
+          name: diskFile.name,
+          path: getDisplayPath(diskFile, activeHandle),
+          size: diskFile.size,
+          content: nextContent,
+          lastModified: diskFile.lastModified,
+        };
+
+        if (editContent !== activeFile.content) {
+          setError(t.externalChangeConflict);
+          setLoadedFile((current) =>
+            current ? { ...current, lastModified: diskFile.lastModified } : current,
+          );
+          return;
+        }
+
+        setLoadedFile(nextFile);
+        setEditContent(nextContent);
+        setError(t.syncedFromDisk);
+        setRecentFiles(await saveRecentFile(nextFile));
+      } catch {
+        // Ignore transient permission or file access failures during background sync.
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void syncExternalChanges();
+    }, 2000);
+
+    return () => {
+      isCurrent = false;
+      window.clearInterval(intervalId);
+    };
+  }, [loadedFile, editContent, fileHandle, t.externalChangeConflict, t.syncedFromDisk]);
+
   async function handleLoadFile(file: LoadedFile, handle: FileSystemFileHandle | null = null) {
-    setLoadedFile(file);
+    const fileId = file.id || createFileId(file.name, file.path, file.size, file.content, file.lastModified);
+    const fileWithId = { ...file, id: fileId };
+
+    setLoadedFile(fileWithId);
     setEditContent(file.content);
     setFileHandle(handle);
     setError(null);
@@ -333,7 +463,7 @@ function App() {
     setSaveStatus("idle");
 
     try {
-      setRecentFiles(await saveRecentFile(file));
+      setRecentFiles(await saveRecentFile(fileWithId));
     } catch {
       setError(t.openedButRecentFailed);
     }
@@ -348,7 +478,7 @@ function App() {
         return;
       }
 
-      await handleLoadFile(file, null);
+      await handleLoadFile({ ...file, id }, null);
     } catch {
       setError(t.openRecentFailed);
     }
@@ -372,6 +502,16 @@ function App() {
       setError(null);
     } catch {
       setError(t.deleteRecentFailed);
+    }
+  }
+
+  async function handleUpdateRecentPath(id: string, path: string) {
+    try {
+      const nextRecent = await updateRecentFilePath(id, path);
+      setRecentFiles(nextRecent);
+      setError(null);
+    } catch {
+      setError("Could not update file location.");
     }
   }
 
@@ -401,7 +541,13 @@ function App() {
         });
         const file = await handle.getFile();
         const content = await file.text();
-        void handleLoadFile({ name: file.name, size: file.size, content }, handle);
+        void handleLoadFile({
+          name: file.name,
+          path: getDisplayPath(file, handle),
+          size: file.size,
+          content,
+          lastModified: file.lastModified,
+        }, handle);
       } else {
         headerInputRef.current?.click();
       }
@@ -427,18 +573,17 @@ function App() {
         await writable.write(editContent);
         await writable.close();
 
-        const sizeBytes = new Blob([editContent]).size;
-        setLoadedFile({
+        const savedFile = await fileHandle.getFile();
+        const sizeBytes = savedFile.size;
+        const updatedFile = {
           ...loadedFile,
           content: editContent,
           size: sizeBytes,
-        });
+          lastModified: savedFile.lastModified,
+        };
+        setLoadedFile(updatedFile);
 
-        const updatedRecent = await saveRecentFile({
-          name: loadedFile.name,
-          size: sizeBytes,
-          content: editContent,
-        });
+        const updatedRecent = await saveRecentFile(updatedFile);
         setRecentFiles(updatedRecent);
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 1500);
@@ -477,18 +622,21 @@ function App() {
 
         setFileHandle(handle);
         
-        const sizeBytes = new Blob([editContent]).size;
-        setLoadedFile({
-          name: handle.name,
+        const savedFile = await handle.getFile();
+        const sizeBytes = savedFile.size;
+        const path = getDisplayPath(savedFile, handle);
+        const newId = createFileId(savedFile.name, path, sizeBytes, editContent, savedFile.lastModified);
+        const newFile = {
+          id: newId,
+          name: savedFile.name,
+          path,
           size: sizeBytes,
           content: editContent,
-        });
+          lastModified: savedFile.lastModified,
+        };
+        setLoadedFile(newFile);
 
-        const updatedRecent = await saveRecentFile({
-          name: handle.name,
-          size: sizeBytes,
-          content: editContent,
-        });
+        const updatedRecent = await saveRecentFile(newFile);
         setRecentFiles(updatedRecent);
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 1500);
@@ -530,7 +678,13 @@ function App() {
           const file = event.target.files?.[0];
           if (file) {
             file.text().then((content) => {
-              void handleLoadFile({ name: file.name, size: file.size, content }, null);
+              void handleLoadFile({
+                name: file.name,
+                path: getDisplayPath(file),
+                size: file.size,
+                content,
+                lastModified: file.lastModified,
+              }, null);
             }).catch(() => {
               setError(t.readFailed);
             });
@@ -702,6 +856,10 @@ function App() {
                   onToggle={() => setIsSettingsOpen(!isSettingsOpen)}
                   onLanguageChange={setLanguage}
                   onThemeChange={setTheme}
+                  onAboutOpen={() => {
+                    setIsSettingsOpen(false);
+                    setIsAboutOpen(true);
+                  }}
                 />
               </div>
             </>
@@ -716,6 +874,10 @@ function App() {
                 onToggle={() => setIsSettingsOpen(!isSettingsOpen)}
                 onLanguageChange={setLanguage}
                 onThemeChange={setTheme}
+                onAboutOpen={() => {
+                  setIsSettingsOpen(false);
+                  setIsAboutOpen(true);
+                }}
               />
             </div>
           )}
@@ -767,6 +929,7 @@ function App() {
             onOpenRecent={(id) => void handleOpenRecent(id)}
             onClearRecent={() => void handleClearRecent()}
             onDeleteRecent={handleDeleteRecent}
+            onUpdateRecentPath={handleUpdateRecentPath}
             labels={t}
           />
         )}
@@ -779,10 +942,27 @@ function App() {
             <span className="status-file-name" title={loadedFile.name}>
               {loadedFile.name}
             </span>
+            {getDistinctPath(loadedFile.path, loadedFile.name) && (
+              <span
+                className="status-file-path"
+                title={getDistinctPath(loadedFile.path, loadedFile.name)}
+              >
+                {getDistinctPath(loadedFile.path, loadedFile.name)}
+              </span>
+            )}
             {isModified && <span className="status-modified-dot" title={t.unsavedChanges}>•</span>}
+            {fileHandle && <span className="status-sync-badge">{t.syncLive}</span>}
           </div>
           <div className="status-right">
             <span className="status-item">{formatBytes(new Blob([editContent]).size)}</span>
+            {loadedFile.lastModified && (
+              <>
+                <span className="status-divider">|</span>
+                <span className="status-item">
+                  {t.modified}: {formatDateTime(loadedFile.lastModified)}
+                </span>
+              </>
+            )}
             {stats && (
               <>
                 <span className="status-divider">|</span>
@@ -797,6 +977,10 @@ function App() {
           </div>
         </footer>
       )}
+
+      {isAboutOpen && (
+        <AboutDialog labels={t} onClose={() => setIsAboutOpen(false)} />
+      )}
     </main>
   );
 }
@@ -809,6 +993,7 @@ type SettingsMenuProps = {
   onToggle: () => void;
   onLanguageChange: (language: Language) => void;
   onThemeChange: (theme: Theme) => void;
+  onAboutOpen: () => void;
 };
 
 const SettingsMenu = React.forwardRef<HTMLDivElement, SettingsMenuProps>(
@@ -821,6 +1006,7 @@ const SettingsMenu = React.forwardRef<HTMLDivElement, SettingsMenuProps>(
       onToggle,
       onLanguageChange,
       onThemeChange,
+      onAboutOpen,
     },
     ref,
   ) => {
@@ -906,12 +1092,82 @@ const SettingsMenu = React.forwardRef<HTMLDivElement, SettingsMenuProps>(
                 </div>
               </div>
             </div>
+
+            <button className="about-settings-btn" type="button" onClick={onAboutOpen}>
+              <span className="about-settings-icon">
+                <Info size={14} aria-hidden="true" />
+              </span>
+              <span>{labels.about}</span>
+              <ChevronRight size={14} aria-hidden="true" />
+            </button>
           </div>
         )}
       </div>
     );
   },
 );
+
+type AboutDialogProps = {
+  labels: typeof translations.en;
+  onClose: () => void;
+};
+
+function AboutDialog({ labels, onClose }: AboutDialogProps) {
+  return (
+    <div className="about-dialog-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="about-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="about-dialog-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="about-dialog-header">
+          <div className="about-dialog-title-row">
+            <span className="about-dialog-icon">
+              <Info size={18} aria-hidden="true" />
+            </span>
+            <h2 id="about-dialog-title">{labels.aboutTitle}</h2>
+          </div>
+          <button
+            className="about-dialog-close"
+            type="button"
+            title={labels.close}
+            onClick={onClose}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+
+        <p className="about-dialog-description">{labels.aboutDescription}</p>
+
+        <dl className="about-dialog-details">
+          <div>
+            <dt>{labels.creator}</dt>
+            <dd>{appCreator}</dd>
+          </div>
+          <div>
+            <dt>{labels.version}</dt>
+            <dd>{appVersion}</dd>
+          </div>
+          <div>
+            <dt>{labels.copyright}</dt>
+            <dd>Copyright © {copyrightYear} {appCreator}</dd>
+          </div>
+          <div>
+            <dt>{labels.github}</dt>
+            <dd>
+              <a href={githubUrl} target="_blank" rel="noreferrer">
+                <span>{githubUrl}</span>
+                <ExternalLink size={13} aria-hidden="true" />
+              </a>
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  );
+}
 
 type HomeScreenProps = {
   recentFiles: RecentFile[];
@@ -921,6 +1177,7 @@ type HomeScreenProps = {
   onOpenRecent: (id: string) => void;
   onClearRecent: () => void;
   onDeleteRecent: (id: string, event: React.MouseEvent) => void;
+  onUpdateRecentPath: (id: string, path: string) => Promise<void>;
   labels: typeof translations.en;
 };
 
@@ -932,8 +1189,17 @@ function HomeScreen({
   onOpenRecent,
   onClearRecent,
   onDeleteRecent,
+  onUpdateRecentPath,
   labels,
 }: HomeScreenProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [tempPath, setTempPath] = useState<string>("");
+
+  const handleSavePath = (id: string) => {
+    void onUpdateRecentPath(id, tempPath);
+    setEditingId(null);
+  };
+
   return (
     <section className="home-screen" aria-label="Markdown viewer home">
       <div className="home-hero">
@@ -976,9 +1242,66 @@ function HomeScreen({
                   <FileText className="recent-item-icon" size={18} aria-hidden="true" />
                   <div className="recent-item-details">
                     <span className="recent-name">{file.name}</span>
-                    <span className="recent-meta">
-                      {formatBytes(file.size)} • {new Date(file.openedAt).toLocaleDateString()}
-                    </span>
+                    {editingId === file.id ? (
+                      <div className="recent-path-edit" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          className="recent-path-input"
+                          value={tempPath}
+                          onChange={(e) => setTempPath(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSavePath(file.id);
+                            else if (e.key === "Escape") setEditingId(null);
+                          }}
+                          autoFocus
+                          placeholder={labels.editLocationPlaceholder}
+                        />
+                        <button
+                          type="button"
+                          className="btn-save-path"
+                          title={labels.saveLocation}
+                          onClick={() => handleSavePath(file.id)}
+                        >
+                          <Check size={12} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-cancel-path"
+                          title={labels.cancelLocation}
+                          onClick={() => setEditingId(null)}
+                        >
+                          <X size={12} aria-hidden="true" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="recent-path-row">
+                        <span
+                          className={`recent-path ${!file.path ? "recent-path-empty" : ""}`}
+                          title={file.path || labels.noLocation}
+                        >
+                          {labels.location}: {file.path || labels.noLocation}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-edit-path"
+                          title={labels.editLocation}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingId(file.id);
+                            setTempPath(file.path || "");
+                          }}
+                        >
+                          <Edit3 size={11} aria-hidden="true" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="recent-meta-list">
+                      <span>{formatBytes(file.size)}</span>
+                      <span>{labels.opened}: {formatDateTime(file.openedAt)}</span>
+                      <span>
+                        {labels.modified}: {formatDateTime(file.lastModified) || labels.modifiedUnknown}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="recent-actions">

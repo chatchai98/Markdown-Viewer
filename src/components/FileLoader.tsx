@@ -3,8 +3,10 @@ import { FileUp } from "lucide-react";
 
 type LoadedFile = {
   name: string;
+  path?: string;
   size: number;
   content: string;
+  lastModified?: number;
 };
 
 type FileLoaderProps = {
@@ -28,6 +30,11 @@ const acceptedExtensions = [".md", ".markdown", ".txt"];
 function isAcceptedFile(file: File) {
   const lowerName = file.name.toLowerCase();
   return acceptedExtensions.some((extension) => lowerName.endsWith(extension));
+}
+
+function getDisplayPath(file: File) {
+  const fileWithPath = file as File & { path?: string };
+  return fileWithPath.path || file.webkitRelativePath || undefined;
 }
 
 export function FileLoader({
@@ -60,7 +67,13 @@ export function FileLoader({
 
     try {
       const content = await file.text();
-      onLoad({ name: file.name, size: file.size, content });
+      onLoad({
+        name: file.name,
+        path: getDisplayPath(file),
+        size: file.size,
+        content,
+        lastModified: file.lastModified,
+      });
     } catch {
       onError(labels.readError);
     }

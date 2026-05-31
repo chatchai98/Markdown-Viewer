@@ -1,8 +1,10 @@
 export type RecentFile = {
   id: string;
   name: string;
+  path?: string;
   size: number;
   openedAt: number;
+  lastModified?: number;
 };
 
 const databaseName = "markdown-viewer";
@@ -28,15 +30,21 @@ export function getRecentFiles(): RecentFile[] {
 }
 
 export async function saveRecentFile(file: {
+  id?: string;
   name: string;
+  path?: string;
   size: number;
   content: string;
+  lastModified?: number;
 }) {
+  const fileId = file.id || createFileId(file.name, file.path, file.size, file.content, file.lastModified);
   const recentFile: RecentFile = {
-    id: createFileId(file.name, file.size, file.content),
+    id: fileId,
     name: file.name,
+    path: file.path,
     size: file.size,
     openedAt: Date.now(),
+    lastModified: file.lastModified,
   };
 
   const nextRecentFiles = [
@@ -73,15 +81,39 @@ export async function deleteRecentFile(id: string) {
   return nextRecentFiles;
 }
 
-function createFileId(name: string, size: number, content: string) {
+export async function updateRecentFilePath(id: string, path: string) {
+  const nextRecentFiles = getRecentFiles().map((item) => {
+    if (item.id === id) {
+      return { ...item, path };
+    }
+    return item;
+  });
+  localStorage.setItem(metadataKey, JSON.stringify(nextRecentFiles));
+
+  const storedFile = await getStoredFile(id);
+  if (storedFile) {
+    await putStoredFile({ ...storedFile, path });
+  }
+
+  return nextRecentFiles;
+}
+
+
+export function createFileId(
+  name: string,
+  path: string | undefined,
+  size: number,
+  content: string,
+  lastModified: number | undefined,
+) {
   let hash = 0;
-  const value = `${name}:${size}:${content.length}:${content.slice(0, 2000)}`;
+  const value = path || `${name}:${size}:${lastModified ?? 0}:${content.slice(0, 2000)}`;
 
   for (let index = 0; index < value.length; index += 1) {
     hash = Math.imul(31, hash) + value.charCodeAt(index);
   }
 
-  return `${name}-${size}-${Math.abs(hash)}`;
+  return `${name}-${Math.abs(hash)}`;
 }
 
 async function putStoredFile(file: StoredFile) {
