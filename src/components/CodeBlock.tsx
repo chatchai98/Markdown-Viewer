@@ -4,16 +4,53 @@ import { Check, Copy } from "lucide-react";
 type CodeBlockProps = {
   code: string;
   language?: string;
+  labels?: {
+    copy: string;
+    copied: string;
+    mermaid: string;
+    mermaidError: string;
+  };
 };
 
-export function CodeBlock({ code, language }: CodeBlockProps) {
-  const [copied, setCopied] = useState(false);
-  const [highlighted, setHighlighted] = useState<string | null>(null);
+export function CodeBlock({
+  code,
+  language,
+  labels = {
+    copy: "Copy",
+    copied: "Copied",
+    mermaid: "Mermaid",
+    mermaidError: "Could not render this Mermaid diagram.",
+  },
+}: CodeBlockProps) {
   const normalizedLanguage = language?.toLowerCase();
 
   if (normalizedLanguage === "mermaid") {
-    return <MermaidBlock code={code} />;
+    return <MermaidBlock code={code} labels={labels} />;
   }
+
+  return (
+    <HighlightedCodeBlock
+      code={code}
+      language={normalizedLanguage}
+      labels={labels}
+    />
+  );
+}
+
+function HighlightedCodeBlock({
+  code,
+  language,
+  labels,
+}: {
+  code: string;
+  language?: string;
+  labels: {
+    copy: string;
+    copied: string;
+  };
+}) {
+  const [copied, setCopied] = useState(false);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -21,8 +58,8 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
     async function highlightCode() {
       const hljs = (await import("highlight.js/lib/common")).default;
       const result =
-        normalizedLanguage && hljs.getLanguage(normalizedLanguage)
-          ? hljs.highlight(code, { language: normalizedLanguage }).value
+        language && hljs.getLanguage(language)
+          ? hljs.highlight(code, { language }).value
           : hljs.highlightAuto(code).value;
 
       if (isCurrent) {
@@ -36,7 +73,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
     return () => {
       isCurrent = false;
     };
-  }, [code, normalizedLanguage]);
+  }, [code, language]);
 
   async function copyCode() {
     try {
@@ -51,7 +88,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   return (
     <div className="code-card">
       <div className="code-toolbar">
-        <span className="code-lang">{normalizedLanguage ?? "text"}</span>
+        <span className="code-lang">{language ?? "text"}</span>
         <button
           className={copied ? "btn-copy copied" : "btn-copy"}
           type="button"
@@ -60,12 +97,12 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
           {copied ? (
             <>
               <Check size={13} aria-hidden="true" />
-              <span>Copied</span>
+              <span>{labels.copied}</span>
             </>
           ) : (
             <>
               <Copy size={13} aria-hidden="true" />
-              <span>Copy</span>
+              <span>{labels.copy}</span>
             </>
           )}
         </button>
@@ -81,7 +118,16 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   );
 }
 
-function MermaidBlock({ code }: { code: string }) {
+function MermaidBlock({
+  code,
+  labels,
+}: {
+  code: string;
+  labels: {
+    mermaid: string;
+    mermaidError: string;
+  };
+}) {
   const rawId = useId();
   const diagramId = `mermaid-${rawId.replace(/:/g, "")}`;
   const [svg, setSvg] = useState<string>("");
@@ -106,7 +152,7 @@ function MermaidBlock({ code }: { code: string }) {
       } catch {
         if (isCurrent) {
           setSvg("");
-          setError("Could not render this Mermaid diagram.");
+          setError(labels.mermaidError);
         }
       }
     }
@@ -121,7 +167,7 @@ function MermaidBlock({ code }: { code: string }) {
   return (
     <div className="diagram-card">
       <div className="code-toolbar">
-        <span>Mermaid</span>
+        <span>{labels.mermaid}</span>
       </div>
       {error ? (
         <pre className="diagram-error">{error}</pre>

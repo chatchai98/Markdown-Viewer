@@ -11,6 +11,16 @@ type FileLoaderProps = {
   onLoad: (file: LoadedFile) => void;
   onError: (message: string) => void;
   variant?: "compact" | "hero";
+  labels?: {
+    unsupportedFile: string;
+    readError: string;
+    dragDrop: string;
+    supports: string;
+    or: string;
+    browse: string;
+    openNewFile: string;
+    dropFileHere: string;
+  };
 };
 
 const acceptedExtensions = [".md", ".markdown", ".txt"];
@@ -24,6 +34,16 @@ export function FileLoader({
   onLoad,
   onError,
   variant = "compact",
+  labels = {
+    unsupportedFile: "Only .md, .markdown, and .txt files are supported.",
+    readError: "Could not read this file.",
+    dragDrop: "Drag & drop your Markdown file",
+    supports: "Supports .md, .markdown, or .txt files",
+    or: "or",
+    browse: "Browse Files",
+    openNewFile: "Open new file",
+    dropFileHere: "or drop file here",
+  },
 }: FileLoaderProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -34,7 +54,7 @@ export function FileLoader({
     }
 
     if (!isAcceptedFile(file)) {
-      onError("Only .md, .markdown, and .txt files are supported.");
+      onError(labels.unsupportedFile);
       return;
     }
 
@@ -42,7 +62,7 @@ export function FileLoader({
       const content = await file.text();
       onLoad({ name: file.name, size: file.size, content });
     } catch {
-      onError("Could not read this file.");
+      onError(labels.readError);
     }
   }
 
@@ -77,22 +97,22 @@ export function FileLoader({
           <div className="drop-icon-wrapper">
             <FileUp className="drop-zone-icon" size={32} aria-hidden="true" />
           </div>
-          <h3>Drag &amp; drop your Markdown file</h3>
-          <p className="drop-zone-tip">Supports .md, .markdown, or .txt files</p>
+          <h3>{labels.dragDrop}</h3>
+          <p className="drop-zone-tip">{labels.supports}</p>
           <div className="drop-divider">
-            <span>or</span>
+            <span>{labels.or}</span>
           </div>
           <button type="button" className="btn-browse" onClick={() => inputRef.current?.click()}>
-            Browse Files
+            {labels.browse}
           </button>
         </div>
       ) : (
         <div className="drop-zone-sidebar-content">
           <button type="button" className="btn-sidebar-open" onClick={() => inputRef.current?.click()}>
             <FileUp size={16} aria-hidden="true" />
-            <span>Open new file</span>
+            <span>{labels.openNewFile}</span>
           </button>
-          <span className="sidebar-drop-tip">or drop file here</span>
+          <span className="sidebar-drop-tip">{labels.dropFileHere}</span>
         </div>
       )}
     </div>

@@ -12,6 +12,8 @@ import {
   Check,
   FileUp,
   Palette,
+  Languages,
+  Settings,
   Save,
   Download,
   Eye,
@@ -46,6 +48,208 @@ type Theme =
   | "rose-pastel";
 
 type ViewMode = "edit" | "preview" | "split";
+type Language = "en" | "th";
+
+const themeOptions: Array<{ value: Theme; label: string; previewClass: string; group: "dark" | "pastel" }> = [
+  { value: "midnight-dark", label: "Midnight", previewClass: "midnight-preview", group: "dark" },
+  { value: "forest-dark", label: "Forest", previewClass: "forest-preview", group: "dark" },
+  { value: "cyber-dark", label: "Cyber", previewClass: "cyber-preview", group: "dark" },
+  { value: "lavender-pastel", label: "Lavender", previewClass: "lavender-preview", group: "pastel" },
+  { value: "sage-pastel", label: "Sage Mint", previewClass: "sage-preview", group: "pastel" },
+  { value: "rose-pastel", label: "Rose Quartz", previewClass: "rose-preview", group: "pastel" },
+];
+
+const languageOptions: Array<{ value: Language; label: string; nativeLabel: string }> = [
+  { value: "en", label: "English", nativeLabel: "English" },
+  { value: "th", label: "Thai", nativeLabel: "ไทย" },
+];
+
+const translations = {
+  en: {
+    appName: "Markdown Viewer",
+    back: "Back",
+    backTitle: "Back to Home",
+    edit: "Editor",
+    split: "Split",
+    preview: "Preview",
+    editTitle: "Editor Mode",
+    splitTitle: "Split Mode",
+    previewTitle: "Preview Mode",
+    open: "Open",
+    openTitle: "Open another file",
+    save: "Save",
+    saving: "Saving...",
+    saved: "Saved",
+    error: "Error",
+    saveTitle: "Save changes (Ctrl+S)",
+    saveAs: "Save As",
+    saveAsTitle: "Save file as...",
+    copied: "Copied",
+    copyRaw: "Copy Raw",
+    copyRawTitle: "Copy Raw Markdown",
+    print: "Print",
+    printTitle: "Print to PDF",
+    guide: "Guide",
+    guideTitle: "Markdown Syntax Guide",
+    settings: "Settings",
+    settingsTitle: "Settings",
+    settingsHeader: "Settings",
+    language: "Language",
+    theme: "Theme",
+    darkThemes: "Dark Themes",
+    pastelThemes: "Pastel Themes",
+    markdownCheatSheet: "Markdown Cheat Sheet",
+    heroBadge: "Offline-first Markdown reader",
+    eyebrow: "Local workspace",
+    heroTitle: "Open a Markdown file",
+    heroDescription: "All processing happens locally on your computer. Your files never touch the cloud, providing complete privacy and secure offline viewing.",
+    recentDocuments: "Recent documents",
+    savedOnDevice: "Saved on this device",
+    noRecentItems: "No recent items",
+    clearHistory: "Clear History",
+    removeFromHistory: "Remove from history",
+    recentEmpty: "No files opened recently. Your viewing history will be shown here.",
+    typePlaceholder: "Type your markdown here...",
+    unsavedChanges: "Unsaved changes",
+    confirmBack: "You have unsaved changes. Are you sure you want to go back?",
+    openedButRecentFailed: "Opened file, but could not save it to recent files.",
+    recentUnavailable: "This recent file is no longer available.",
+    openRecentFailed: "Could not open this recent file.",
+    clearRecentFailed: "Could not clear recent files.",
+    deleteRecentFailed: "Could not delete this recent file.",
+    copyFailed: "Failed to copy raw text.",
+    readFailed: "Could not read this file.",
+    saveDirectFailed: "Could not save the file directly. Try Save As.",
+    markdownFiles: "Markdown Files",
+    words: "words",
+    minRead: "min read",
+    fileLoader: {
+      unsupportedFile: "Only .md, .markdown, and .txt files are supported.",
+      readError: "Could not read this file.",
+      dragDrop: "Drag & drop your Markdown file",
+      supports: "Supports .md, .markdown, or .txt files",
+      or: "or",
+      browse: "Browse Files",
+      openNewFile: "Open new file",
+      dropFileHere: "or drop file here",
+    },
+    markdownViewer: {
+      blockedRemoteImage: "Remote image blocked:",
+      copy: "Copy",
+      copied: "Copied",
+      mermaid: "Mermaid",
+      mermaidError: "Could not render this Mermaid diagram.",
+    },
+    guideRows: [
+      ["# Heading 1", "Largest heading"],
+      ["## Heading 2", "Medium heading"],
+      ["### Heading 3", "Small heading"],
+      ["**bold**", "Bold text"],
+      ["*italic*", "Italic text"],
+      ["[link text](URL)", "Create a link"],
+      ["- item", "Bullet list"],
+      ["1. item", "Numbered list"],
+      ["[ ] task", "Create a checklist"],
+      ["> quote", "Quote block"],
+      ["`code`", "Inline code"],
+      ["```lang...```", "Multi-line code block"],
+      ["| column |", "Create a table"],
+      ["```mermaid...```", "Render a chart or diagram"],
+    ],
+  },
+  th: {
+    appName: "Markdown Viewer",
+    back: "กลับ",
+    backTitle: "กลับหน้าแรก",
+    edit: "แก้ไข",
+    split: "แบ่งจอ",
+    preview: "พรีวิว",
+    editTitle: "โหมดแก้ไข",
+    splitTitle: "โหมดแบ่งจอ",
+    previewTitle: "โหมดพรีวิว",
+    open: "เปิดไฟล์",
+    openTitle: "เปิดไฟล์อื่น",
+    save: "บันทึก",
+    saving: "กำลังบันทึก...",
+    saved: "บันทึกแล้ว",
+    error: "ผิดพลาด",
+    saveTitle: "บันทึกการแก้ไข (Ctrl+S)",
+    saveAs: "บันทึกเป็น",
+    saveAsTitle: "บันทึกไฟล์เป็น...",
+    copied: "คัดลอกแล้ว",
+    copyRaw: "คัดลอกดิบ",
+    copyRawTitle: "คัดลอก Markdown ดิบ",
+    print: "พิมพ์",
+    printTitle: "พิมพ์เป็น PDF",
+    guide: "คู่มือ",
+    guideTitle: "คู่มือ Markdown",
+    settings: "ตั้งค่า",
+    settingsTitle: "ตั้งค่า",
+    settingsHeader: "ตั้งค่า",
+    language: "ภาษา",
+    theme: "ธีม",
+    darkThemes: "ธีมมืด",
+    pastelThemes: "ธีมพาสเทล",
+    markdownCheatSheet: "สรุปคำสั่ง Markdown",
+    heroBadge: "อ่าน Markdown แบบออฟไลน์ก่อน",
+    eyebrow: "พื้นที่ทำงานบนเครื่อง",
+    heroTitle: "เปิดไฟล์ Markdown",
+    heroDescription: "ทุกอย่างประมวลผลบนเครื่องของคุณ ไฟล์ไม่ถูกส่งขึ้นคลาวด์ เพื่อความเป็นส่วนตัวและการใช้งานแบบออฟไลน์ที่ปลอดภัย",
+    recentDocuments: "เอกสารล่าสุด",
+    savedOnDevice: "บันทึกไว้บนอุปกรณ์นี้",
+    noRecentItems: "ยังไม่มีรายการล่าสุด",
+    clearHistory: "ล้างประวัติ",
+    removeFromHistory: "ลบออกจากประวัติ",
+    recentEmpty: "ยังไม่มีไฟล์ที่เปิดล่าสุด ประวัติการใช้งานจะแสดงที่นี่",
+    typePlaceholder: "พิมพ์ Markdown ของคุณที่นี่...",
+    unsavedChanges: "มีการแก้ไขที่ยังไม่ได้บันทึก",
+    confirmBack: "มีการแก้ไขที่ยังไม่ได้บันทึก ต้องการกลับจริงไหม?",
+    openedButRecentFailed: "เปิดไฟล์แล้ว แต่ไม่สามารถบันทึกลงรายการล่าสุดได้",
+    recentUnavailable: "ไฟล์ล่าสุดนี้ไม่พร้อมใช้งานแล้ว",
+    openRecentFailed: "ไม่สามารถเปิดไฟล์ล่าสุดนี้ได้",
+    clearRecentFailed: "ไม่สามารถล้างประวัติไฟล์ล่าสุดได้",
+    deleteRecentFailed: "ไม่สามารถลบไฟล์นี้จากประวัติได้",
+    copyFailed: "ไม่สามารถคัดลอกข้อความดิบได้",
+    readFailed: "ไม่สามารถอ่านไฟล์นี้ได้",
+    saveDirectFailed: "ไม่สามารถบันทึกไฟล์โดยตรงได้ ลองใช้บันทึกเป็น",
+    markdownFiles: "ไฟล์ Markdown",
+    words: "คำ",
+    minRead: "นาทีในการอ่าน",
+    fileLoader: {
+      unsupportedFile: "รองรับเฉพาะไฟล์ .md, .markdown และ .txt",
+      readError: "ไม่สามารถอ่านไฟล์นี้ได้",
+      dragDrop: "ลากและวางไฟล์ Markdown ของคุณ",
+      supports: "รองรับไฟล์ .md, .markdown หรือ .txt",
+      or: "หรือ",
+      browse: "เลือกไฟล์",
+      openNewFile: "เปิดไฟล์ใหม่",
+      dropFileHere: "หรือลากไฟล์มาวางที่นี่",
+    },
+    markdownViewer: {
+      blockedRemoteImage: "บล็อกรูปภาพภายนอก:",
+      copy: "คัดลอก",
+      copied: "คัดลอกแล้ว",
+      mermaid: "Mermaid",
+      mermaidError: "ไม่สามารถเรนเดอร์ไดอะแกรม Mermaid นี้ได้",
+    },
+    guideRows: [
+      ["# หัวข้อ 1", "Heading ใหญ่สุด"],
+      ["## หัวข้อ 2", "Heading ขนาดกลาง"],
+      ["### หัวข้อ 3", "Heading ขนาดเล็ก"],
+      ["**ตัวหนา**", "ข้อความตัวหนา"],
+      ["*ตัวเอียง*", "ข้อความตัวเอียง"],
+      ["[ชื่อลิงก์](URL)", "สร้างลิงก์เชื่อมโยง"],
+      ["- รายการ", "รายการหัวข้อหลัก"],
+      ["1. รายการ", "รายการแบบลำดับเลข"],
+      ["[ ] งานย่อย", "สร้าง Checklist"],
+      ["> ข้อความอ้างอิง", "กล่องคำพูด (Quote)"],
+      ["`โค้ด`", "โค้ดบรรทัดเดียว"],
+      ["```ภาษา...```", "โค้ดบล็อกหลายบรรทัด"],
+      ["| คอลัมน์ |", "สร้างตารางข้อมูล"],
+      ["```mermaid...```", "เรนเดอร์ชาร์ต/ไดอะแกรม"],
+    ],
+  },
+} satisfies Record<Language, Record<string, any>>;
 
 function App() {
   const [loadedFile, setLoadedFile] = useState<LoadedFile | null>(null);
@@ -54,6 +258,7 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [theme, setTheme] = useState<Theme>("lavender-pastel");
+  const [language, setLanguage] = useState<Language>("en");
   const [error, setError] = useState<string | null>(null);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [copiedRaw, setCopiedRaw] = useState(false);
@@ -63,6 +268,7 @@ function App() {
   const headerInputRef = useRef<HTMLInputElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const guideRef = useRef<HTMLDivElement | null>(null);
+  const t = translations[language];
 
   const isModified = useMemo(() => {
     if (!loadedFile) return false;
@@ -80,7 +286,16 @@ function App() {
 
   useEffect(() => {
     setRecentFiles(getRecentFiles());
+    const storedLanguage = localStorage.getItem("markdown-viewer:language");
+    if (storedLanguage === "en" || storedLanguage === "th") {
+      setLanguage(storedLanguage);
+    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("markdown-viewer:language", language);
+    document.documentElement.lang = language;
+  }, [language]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -120,7 +335,7 @@ function App() {
     try {
       setRecentFiles(await saveRecentFile(file));
     } catch {
-      setError("Opened file, but could not save it to recent files.");
+      setError(t.openedButRecentFailed);
     }
   }
 
@@ -128,14 +343,14 @@ function App() {
     try {
       const file = await openRecentFile(id);
       if (!file) {
-        setError("This recent file is no longer available.");
+        setError(t.recentUnavailable);
         setRecentFiles(getRecentFiles().filter((item) => item.id !== id));
         return;
       }
 
       await handleLoadFile(file, null);
     } catch {
-      setError("Could not open this recent file.");
+      setError(t.openRecentFailed);
     }
   }
 
@@ -145,7 +360,7 @@ function App() {
       setRecentFiles([]);
       setError(null);
     } catch {
-      setError("Could not clear recent files.");
+      setError(t.clearRecentFailed);
     }
   }
 
@@ -156,7 +371,7 @@ function App() {
       setRecentFiles(nextRecent);
       setError(null);
     } catch {
-      setError("Could not delete this recent file.");
+      setError(t.deleteRecentFailed);
     }
   }
 
@@ -167,7 +382,7 @@ function App() {
       setCopiedRaw(true);
       setTimeout(() => setCopiedRaw(false), 1500);
     } catch {
-      setError("Failed to copy raw text.");
+      setError(t.copyFailed);
     }
   }
 
@@ -177,7 +392,7 @@ function App() {
       if ("showOpenFilePicker" in win) {
         const [handle] = await win.showOpenFilePicker({
           types: [{
-            description: "Markdown Files",
+            description: t.markdownFiles,
             accept: {
               "text/markdown": [".md", ".markdown"],
               "text/plain": [".txt"]
@@ -232,7 +447,7 @@ function App() {
       }
     } catch (err) {
       setSaveStatus("error");
-      setError("Could not save the file directly. Try Save As.");
+      setError(t.saveDirectFailed);
       setTimeout(() => setSaveStatus("idle"), 3000);
     }
   }
@@ -247,7 +462,7 @@ function App() {
           suggestedName: loadedFile.name,
           types: [
             {
-              description: "Markdown Files",
+              description: t.markdownFiles,
               accept: {
                 "text/markdown": [".md", ".markdown"],
                 "text/plain": [".txt"],
@@ -297,7 +512,7 @@ function App() {
 
   function handleBack() {
     if (isModified) {
-      const confirm = window.confirm("You have unsaved changes. Are you sure you want to go back?");
+      const confirm = window.confirm(t.confirmBack);
       if (!confirm) return;
     }
     setLoadedFile(null);
@@ -317,7 +532,7 @@ function App() {
             file.text().then((content) => {
               void handleLoadFile({ name: file.name, size: file.size, content }, null);
             }).catch(() => {
-              setError("Could not read this file.");
+              setError(t.readFailed);
             });
           }
         }}
@@ -330,14 +545,14 @@ function App() {
               className="btn-back"
               type="button"
               onClick={handleBack}
-              title="Back to Home"
+              title={t.backTitle}
             >
               <ArrowLeft size={16} aria-hidden="true" />
-              <span>Back</span>
+              <span>{t.back}</span>
             </button>
           ) : null}
           <div className="app-logo">
-            <h1>Markdown Viewer</h1>
+            <h1>{t.appName}</h1>
           </div>
         </div>
 
@@ -347,29 +562,29 @@ function App() {
               <button
                 className={`btn-toggle-view ${viewMode === "edit" ? "active" : ""}`}
                 type="button"
-                title="Editor Mode"
+                title={t.editTitle}
                 onClick={() => setViewMode("edit")}
               >
                 <Edit3 size={13} aria-hidden="true" />
-                <span>Editor</span>
+                <span>{t.edit}</span>
               </button>
               <button
                 className={`btn-toggle-view ${viewMode === "split" ? "active" : ""}`}
                 type="button"
-                title="Split Mode"
+                title={t.splitTitle}
                 onClick={() => setViewMode("split")}
               >
                 <Columns size={13} aria-hidden="true" />
-                <span>Split</span>
+                <span>{t.split}</span>
               </button>
               <button
                 className={`btn-toggle-view ${viewMode === "preview" ? "active" : ""}`}
                 type="button"
-                title="Preview Mode"
+                title={t.previewTitle}
                 onClick={() => setViewMode("preview")}
               >
                 <Eye size={13} aria-hidden="true" />
-                <span>Preview</span>
+                <span>{t.preview}</span>
               </button>
             </div>
           </>
@@ -381,16 +596,16 @@ function App() {
                 <button
                   className="btn-header-action"
                   type="button"
-                  title="Open another file"
+                  title={t.openTitle}
                   onClick={() => void triggerOpenFilePicker()}
                 >
                   <FileUp size={14} aria-hidden="true" />
-                  <span>Open</span>
+                  <span>{t.open}</span>
                 </button>
                 <button
                   className={`btn-header-action btn-save ${isModified ? "modified" : ""} ${saveStatus === "saved" ? "saved" : ""}`}
                   type="button"
-                  title="Save changes (Ctrl+S)"
+                  title={t.saveTitle}
                   onClick={() => void handleSaveFile()}
                   disabled={saveStatus === "saving"}
                 >
@@ -401,22 +616,22 @@ function App() {
                   )}
                   <span>
                     {saveStatus === "saving"
-                      ? "Saving..."
+                      ? t.saving
                       : saveStatus === "saved"
-                      ? "Saved"
+                      ? t.saved
                       : saveStatus === "error"
-                      ? "Error"
-                      : "Save"}
+                      ? t.error
+                      : t.save}
                   </span>
                 </button>
                 <button
                   className="btn-header-action"
                   type="button"
-                  title="Save file as..."
+                  title={t.saveAsTitle}
                   onClick={() => void handleSaveAsFile()}
                 >
                   <Download size={14} aria-hidden="true" />
-                  <span>Save As</span>
+                  <span>{t.saveAs}</span>
                 </button>
               </div>
 
@@ -425,7 +640,7 @@ function App() {
                 <button
                   className={copiedRaw ? "btn-header-action copied" : "btn-header-action"}
                   type="button"
-                  title="Copy Raw Markdown"
+                  title={t.copyRawTitle}
                   onClick={() => void handleCopyRaw()}
                 >
                   {copiedRaw ? (
@@ -433,16 +648,16 @@ function App() {
                   ) : (
                     <Copy size={14} aria-hidden="true" />
                   )}
-                  <span>{copiedRaw ? "Copied" : "Copy Raw"}</span>
+                  <span>{copiedRaw ? t.copied : t.copyRaw}</span>
                 </button>
                 <button
                   className="btn-header-action"
                   type="button"
-                  title="Print to PDF"
+                  title={t.printTitle}
                   onClick={() => window.print()}
                 >
                   <Printer size={14} aria-hidden="true" />
-                  <span>Print</span>
+                  <span>{t.print}</span>
                 </button>
               </div>
 
@@ -453,241 +668,55 @@ function App() {
                     <button
                       className={`btn-guide-toggle ${isGuideOpen ? "active" : ""}`}
                       type="button"
-                      title="Markdown Syntax Guide"
+                      title={t.guideTitle}
                       onClick={() => setIsGuideOpen(!isGuideOpen)}
                     >
                       <HelpCircle size={14} aria-hidden="true" />
-                      <span>Guide</span>
+                      <span>{t.guide}</span>
                     </button>
                     
                     {isGuideOpen && (
                       <div className="guide-dropdown-menu">
                         <div className="dropdown-header">
-                          <span>Markdown Cheat Sheet</span>
+                          <span>{t.markdownCheatSheet}</span>
                         </div>
                         <div className="guide-scrollable-content">
-                          <div className="guide-row">
-                            <code># หัวข้อ 1</code>
-                            <span>Heading ใหญ่สุด</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>## หัวข้อ 2</code>
-                            <span>Heading ขนาดกลาง</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>### หัวข้อ 3</code>
-                            <span>Heading ขนาดเล็ก</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>**ตัวหนา**</code>
-                            <span>ข้อความตัวหนา</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>*ตัวเอียง*</code>
-                            <span>ข้อความตัวเอียง</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>[ชื่อลิงก์](URL)</code>
-                            <span>สร้างลิงก์เชื่อมโยง</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>- รายการ</code>
-                            <span>รายการหัวข้อหลัก</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>1. รายการ</code>
-                            <span>รายการแบบลำดับเลข</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>[ ] งานย่อย</code>
-                            <span>สร้าง Checklist</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>&gt; ข้อความอ้างอิง</code>
-                            <span>กล่องคำพูด (Quote)</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>`โค้ด`</code>
-                            <span>โค้ดบรรทัดเดียว</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>```ภาษา...```</code>
-                            <span>โค้ดบล็อกหลายบรรทัด</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>| คอลัมน์ |</code>
-                            <span>สร้างตารางข้อมูล</span>
-                          </div>
-                          <div className="guide-row">
-                            <code>```mermaid...```</code>
-                            <span>เรนเดอร์ชาร์ต/ไดอะแกรม</span>
-                          </div>
+                          {t.guideRows.map(([syntax, description]) => (
+                            <div className="guide-row" key={`${syntax}-${description}`}>
+                              <code>{syntax}</code>
+                              <span>{description}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
                   </div>
                 )}
                 
-                <div className="theme-settings-container" ref={settingsRef}>
-                  <button
-                    className={`btn-theme-toggle ${isSettingsOpen ? "active" : ""}`}
-                    type="button"
-                    title="Choose Theme"
-                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                  >
-                    <Palette size={14} aria-hidden="true" />
-                  </button>
-                  
-                  {isSettingsOpen && (
-                    <div className="theme-dropdown-menu">
-                      <div className="dropdown-header">
-                        <span>Color Themes</span>
-                      </div>
-                      
-                      <div className="dropdown-section">
-                        <span className="section-label">Dark Themes</span>
-                        <div className="theme-grid">
-                          <button
-                            className={`theme-option-btn ${theme === "midnight-dark" ? "active" : ""}`}
-                            type="button"
-                            onClick={() => { setTheme("midnight-dark"); setIsSettingsOpen(false); }}
-                          >
-                            <span className="color-preview midnight-preview" />
-                            <span>Midnight</span>
-                          </button>
-                          <button
-                            className={`theme-option-btn ${theme === "forest-dark" ? "active" : ""}`}
-                            type="button"
-                            onClick={() => { setTheme("forest-dark"); setIsSettingsOpen(false); }}
-                          >
-                            <span className="color-preview forest-preview" />
-                            <span>Forest</span>
-                          </button>
-                          <button
-                            className={`theme-option-btn ${theme === "cyber-dark" ? "active" : ""}`}
-                            type="button"
-                            onClick={() => { setTheme("cyber-dark"); setIsSettingsOpen(false); }}
-                          >
-                            <span className="color-preview cyber-preview" />
-                            <span>Cyber</span>
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="dropdown-section">
-                        <span className="section-label">Pastel Themes</span>
-                        <div className="theme-grid">
-                          <button
-                            className={`theme-option-btn ${theme === "lavender-pastel" ? "active" : ""}`}
-                            type="button"
-                            onClick={() => { setTheme("lavender-pastel"); setIsSettingsOpen(false); }}
-                          >
-                            <span className="color-preview lavender-preview" />
-                            <span>Lavender</span>
-                          </button>
-                          <button
-                            className={`theme-option-btn ${theme === "sage-pastel" ? "active" : ""}`}
-                            type="button"
-                            onClick={() => { setTheme("sage-pastel"); setIsSettingsOpen(false); }}
-                          >
-                            <span className="color-preview sage-preview" />
-                            <span>Sage Mint</span>
-                          </button>
-                          <button
-                            className={`theme-option-btn ${theme === "rose-pastel" ? "active" : ""}`}
-                            type="button"
-                            onClick={() => { setTheme("rose-pastel"); setIsSettingsOpen(false); }}
-                          >
-                            <span className="color-preview rose-preview" />
-                            <span>Rose Quartz</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <SettingsMenu
+                  ref={settingsRef}
+                  isOpen={isSettingsOpen}
+                  language={language}
+                  theme={theme}
+                  labels={t}
+                  onToggle={() => setIsSettingsOpen(!isSettingsOpen)}
+                  onLanguageChange={setLanguage}
+                  onThemeChange={setTheme}
+                />
               </div>
             </>
           ) : (
             <div className="header-btn-group">
-              <div className="theme-settings-container" ref={settingsRef}>
-                <button
-                  className={`btn-theme-toggle ${isSettingsOpen ? "active" : ""}`}
-                  type="button"
-                  title="Choose Theme"
-                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                >
-                  <Palette size={14} aria-hidden="true" />
-                </button>
-                
-                {isSettingsOpen && (
-                  <div className="theme-dropdown-menu">
-                    <div className="dropdown-header">
-                      <span>Color Themes</span>
-                    </div>
-                    
-                    <div className="dropdown-section">
-                      <span className="section-label">Dark Themes</span>
-                      <div className="theme-grid">
-                        <button
-                          className={`theme-option-btn ${theme === "midnight-dark" ? "active" : ""}`}
-                          type="button"
-                          onClick={() => { setTheme("midnight-dark"); setIsSettingsOpen(false); }}
-                        >
-                          <span className="color-preview midnight-preview" />
-                          <span>Midnight</span>
-                        </button>
-                        <button
-                          className={`theme-option-btn ${theme === "forest-dark" ? "active" : ""}`}
-                          type="button"
-                          onClick={() => { setTheme("forest-dark"); setIsSettingsOpen(false); }}
-                        >
-                          <span className="color-preview forest-preview" />
-                          <span>Forest</span>
-                        </button>
-                        <button
-                          className={`theme-option-btn ${theme === "cyber-dark" ? "active" : ""}`}
-                          type="button"
-                          onClick={() => { setTheme("cyber-dark"); setIsSettingsOpen(false); }}
-                        >
-                          <span className="color-preview cyber-preview" />
-                          <span>Cyber</span>
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="dropdown-section">
-                      <span className="section-label">Pastel Themes</span>
-                      <div className="theme-grid">
-                        <button
-                          className={`theme-option-btn ${theme === "lavender-pastel" ? "active" : ""}`}
-                          type="button"
-                          onClick={() => { setTheme("lavender-pastel"); setIsSettingsOpen(false); }}
-                        >
-                          <span className="color-preview lavender-preview" />
-                          <span>Lavender</span>
-                        </button>
-                        <button
-                          className={`theme-option-btn ${theme === "sage-pastel" ? "active" : ""}`}
-                          type="button"
-                          onClick={() => { setTheme("sage-pastel"); setIsSettingsOpen(false); }}
-                        >
-                          <span className="color-preview sage-preview" />
-                          <span>Sage Mint</span>
-                        </button>
-                        <button
-                          className={`theme-option-btn ${theme === "rose-pastel" ? "active" : ""}`}
-                          type="button"
-                          onClick={() => { setTheme("rose-pastel"); setIsSettingsOpen(false); }}
-                        >
-                          <span className="color-preview rose-preview" />
-                          <span>Rose Quartz</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <SettingsMenu
+                ref={settingsRef}
+                isOpen={isSettingsOpen}
+                language={language}
+                theme={theme}
+                labels={t}
+                onToggle={() => setIsSettingsOpen(!isSettingsOpen)}
+                onLanguageChange={setLanguage}
+                onThemeChange={setTheme}
+              />
             </div>
           )}
         </div>
@@ -702,14 +731,14 @@ function App() {
                   className="editor-textarea"
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  placeholder="Type your markdown here..."
+                  placeholder={t.typePlaceholder}
                   spellCheck="false"
                 />
               </div>
             )}
             {viewMode === "preview" && (
               <div className="viewer-content">
-                <MarkdownViewer markdown={editContent} />
+                <MarkdownViewer markdown={editContent} labels={t.markdownViewer} />
               </div>
             )}
             {viewMode === "split" && (
@@ -719,12 +748,12 @@ function App() {
                     className="editor-textarea"
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    placeholder="Type your markdown here..."
+                    placeholder={t.typePlaceholder}
                     spellCheck="false"
                   />
                 </div>
                 <div className="preview-pane">
-                  <MarkdownViewer markdown={editContent} />
+                  <MarkdownViewer markdown={editContent} labels={t.markdownViewer} />
                 </div>
               </div>
             )}
@@ -738,6 +767,7 @@ function App() {
             onOpenRecent={(id) => void handleOpenRecent(id)}
             onClearRecent={() => void handleClearRecent()}
             onDeleteRecent={handleDeleteRecent}
+            labels={t}
           />
         )}
       </section>
@@ -749,18 +779,18 @@ function App() {
             <span className="status-file-name" title={loadedFile.name}>
               {loadedFile.name}
             </span>
-            {isModified && <span className="status-modified-dot" title="Unsaved changes">•</span>}
+            {isModified && <span className="status-modified-dot" title={t.unsavedChanges}>•</span>}
           </div>
           <div className="status-right">
             <span className="status-item">{formatBytes(new Blob([editContent]).size)}</span>
             {stats && (
               <>
                 <span className="status-divider">|</span>
-                <span className="status-item">{stats.wordCount} words</span>
+                <span className="status-item">{stats.wordCount} {t.words}</span>
                 <span className="status-divider">|</span>
                 <span className="status-item status-read-time">
                   <Clock3 size={11} aria-hidden="true" />
-                  <span>{stats.readTime} min read</span>
+                  <span>{stats.readTime} {t.minRead}</span>
                 </span>
               </>
             )}
@@ -771,6 +801,118 @@ function App() {
   );
 }
 
+type SettingsMenuProps = {
+  isOpen: boolean;
+  language: Language;
+  theme: Theme;
+  labels: typeof translations.en;
+  onToggle: () => void;
+  onLanguageChange: (language: Language) => void;
+  onThemeChange: (theme: Theme) => void;
+};
+
+const SettingsMenu = React.forwardRef<HTMLDivElement, SettingsMenuProps>(
+  (
+    {
+      isOpen,
+      language,
+      theme,
+      labels,
+      onToggle,
+      onLanguageChange,
+      onThemeChange,
+    },
+    ref,
+  ) => {
+    return (
+      <div className="settings-container" ref={ref}>
+        <button
+          className={`btn-settings-toggle ${isOpen ? "active" : ""}`}
+          type="button"
+          title={labels.settingsTitle}
+          onClick={onToggle}
+          aria-expanded={isOpen}
+        >
+          <Settings size={14} aria-hidden="true" />
+          <span>{labels.settings}</span>
+        </button>
+
+        {isOpen && (
+          <div className="settings-dropdown-menu">
+            <div className="dropdown-header settings-dropdown-header">
+              <Settings size={14} aria-hidden="true" />
+              <span>{labels.settingsHeader}</span>
+            </div>
+
+            <div className="dropdown-section">
+              <span className="section-label">
+                <Languages size={12} aria-hidden="true" />
+                {labels.language}
+              </span>
+              <div className="language-segment">
+                {languageOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    className={`language-option-btn ${language === option.value ? "active" : ""}`}
+                    type="button"
+                    onClick={() => onLanguageChange(option.value)}
+                    aria-pressed={language === option.value}
+                  >
+                    <span>{option.nativeLabel}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="dropdown-section">
+              <span className="section-label">
+                <Palette size={12} aria-hidden="true" />
+                {labels.theme}
+              </span>
+              <div className="theme-settings-grid">
+                <div className="theme-group">
+                  <span className="theme-group-label">{labels.darkThemes}</span>
+                  {themeOptions
+                    .filter((option) => option.group === "dark")
+                    .map((option) => (
+                      <button
+                        className={`theme-option-btn ${theme === option.value ? "active" : ""}`}
+                        type="button"
+                        key={option.value}
+                        onClick={() => onThemeChange(option.value)}
+                        aria-pressed={theme === option.value}
+                      >
+                        <span className={`color-preview ${option.previewClass}`} />
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                </div>
+                <div className="theme-group">
+                  <span className="theme-group-label">{labels.pastelThemes}</span>
+                  {themeOptions
+                    .filter((option) => option.group === "pastel")
+                    .map((option) => (
+                      <button
+                        className={`theme-option-btn ${theme === option.value ? "active" : ""}`}
+                        type="button"
+                        key={option.value}
+                        onClick={() => onThemeChange(option.value)}
+                        aria-pressed={theme === option.value}
+                      >
+                        <span className={`color-preview ${option.previewClass}`} />
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  },
+);
+
 type HomeScreenProps = {
   recentFiles: RecentFile[];
   error: string | null;
@@ -779,6 +921,7 @@ type HomeScreenProps = {
   onOpenRecent: (id: string) => void;
   onClearRecent: () => void;
   onDeleteRecent: (id: string, event: React.MouseEvent) => void;
+  labels: typeof translations.en;
 };
 
 function HomeScreen({
@@ -789,33 +932,34 @@ function HomeScreen({
   onOpenRecent,
   onClearRecent,
   onDeleteRecent,
+  labels,
 }: HomeScreenProps) {
   return (
     <section className="home-screen" aria-label="Markdown viewer home">
       <div className="home-hero">
         <div className="hero-badge">
           <MonitorCheck size={14} aria-hidden="true" />
-          <span>Offline-first Markdown reader</span>
+          <span>{labels.heroBadge}</span>
         </div>
-        <p className="eyebrow">Local workspace</p>
-        <h2>Open a Markdown file</h2>
+        <p className="eyebrow">{labels.eyebrow}</p>
+        <h2>{labels.heroTitle}</h2>
         <p className="hero-description">
-          All processing happens locally on your computer. Your files never touch the cloud, providing complete privacy and secure offline viewing.
+          {labels.heroDescription}
         </p>
-        <FileLoader onLoad={onLoadFile} onError={onError} variant="hero" />
+        <FileLoader onLoad={onLoadFile} onError={onError} variant="hero" labels={labels.fileLoader} />
         {error && <p className="home-error">{error}</p>}
       </div>
 
       <div className="recent-panel">
         <div className="recent-header">
           <div className="recent-header-text">
-            <span className="status-label">Recent documents</span>
-            <strong>{recentFiles.length ? "Saved on this device" : "No recent items"}</strong>
+            <span className="status-label">{labels.recentDocuments}</span>
+            <strong>{recentFiles.length ? labels.savedOnDevice : labels.noRecentItems}</strong>
           </div>
           {recentFiles.length > 0 && (
             <button className="btn-clear-recent" type="button" onClick={onClearRecent}>
               <Eraser size={14} aria-hidden="true" />
-              <span>Clear History</span>
+              <span>{labels.clearHistory}</span>
             </button>
           )}
         </div>
@@ -841,7 +985,7 @@ function HomeScreen({
                   <button
                     className="btn-delete-recent"
                     type="button"
-                    title="Remove from history"
+                    title={labels.removeFromHistory}
                     onClick={(event) => onDeleteRecent(file.id, event)}
                   >
                     <Trash2 size={14} aria-hidden="true" />
@@ -854,7 +998,7 @@ function HomeScreen({
         ) : (
           <div className="recent-empty-container">
             <p className="recent-empty">
-              No files opened recently. Your viewing history will be shown here.
+              {labels.recentEmpty}
             </p>
           </div>
         )}

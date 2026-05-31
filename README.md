@@ -2,6 +2,12 @@
 
 Markdown Viewer is a lightweight local-first Markdown reader and editor built with React, TypeScript, and Vite. It focuses on reading Markdown files safely in the browser, with rich rendering for GitHub Flavored Markdown, code blocks, and Mermaid diagrams.
 
+## 📸 Screenshots
+
+<img src="assets/screenshots/light.png" alt="Markdown Viewer light theme" width="900" />
+
+<img src="assets/screenshots/dark.png" alt="Markdown Viewer dark theme" width="900" />
+
 ## ✨ Features
 
 - 📂 Open `.md`, `.markdown`, and `.txt` files by drag and drop or file picker.

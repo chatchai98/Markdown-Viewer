@@ -5,13 +5,29 @@ import { CodeBlock } from "./CodeBlock";
 
 type MarkdownViewerProps = {
   markdown: string;
+  labels?: {
+    blockedRemoteImage: string;
+    copy: string;
+    copied: string;
+    mermaid: string;
+    mermaidError: string;
+  };
 };
 
 function isRemoteUrl(src: string | undefined) {
   return Boolean(src && /^https?:\/\//i.test(src));
 }
 
-export function MarkdownViewer({ markdown }: MarkdownViewerProps) {
+export function MarkdownViewer({
+  markdown,
+  labels = {
+    blockedRemoteImage: "Remote image blocked:",
+    copy: "Copy",
+    copied: "Copied",
+    mermaid: "Mermaid",
+    mermaidError: "Could not render this Mermaid diagram.",
+  },
+}: MarkdownViewerProps) {
   return (
     <article className="markdown-body">
       <ReactMarkdown
@@ -23,7 +39,7 @@ export function MarkdownViewer({ markdown }: MarkdownViewerProps) {
             const code = String(children).replace(/\n$/, "");
 
             if (match) {
-              return <CodeBlock code={code} language={match[1]} />;
+              return <CodeBlock code={code} language={match[1]} labels={labels} />;
             }
 
             return (
@@ -36,7 +52,7 @@ export function MarkdownViewer({ markdown }: MarkdownViewerProps) {
             if (isRemoteUrl(src)) {
               return (
                 <span className="blocked-media">
-                  Remote image blocked: {alt || src}
+                  {labels.blockedRemoteImage} {alt || src}
                 </span>
               );
             }
