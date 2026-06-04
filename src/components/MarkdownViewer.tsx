@@ -1,3 +1,4 @@
+import { Children, isValidElement, type CSSProperties, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -18,6 +19,28 @@ function isRemoteUrl(src: string | undefined) {
   return Boolean(src && /^https?:\/\//i.test(src));
 }
 
+function getTableColumnCount(children: ReactNode): number {
+  let columnCount = 0;
+
+  function visit(node: ReactNode) {
+    if (columnCount > 0 || !isValidElement<{ children?: ReactNode }>(node)) {
+      return;
+    }
+
+    if (node.type === "tr") {
+      columnCount = Children.toArray(node.props.children).filter(
+        (child) => isValidElement(child) && (child.type === "th" || child.type === "td"),
+      ).length;
+      return;
+    }
+
+    Children.forEach(node.props.children, visit);
+  }
+
+  Children.forEach(children, visit);
+  return columnCount;
+}
+
 export function MarkdownViewer({
   markdown,
   labels = {
@@ -34,6 +57,19 @@ export function MarkdownViewer({
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeSanitize]}
         components={{
+          table({ children }) {
+            const columnCount = getTableColumnCount(children);
+            const tableStyle =
+              columnCount > 0
+                ? ({ "--markdown-table-columns": columnCount } as CSSProperties)
+                : undefined;
+
+            return (
+              <div className="markdown-table-scroll" style={tableStyle}>
+                {children}
+              </div>
+            );
+          },
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className ?? "");
             const code = String(children).replace(/\n$/, "");

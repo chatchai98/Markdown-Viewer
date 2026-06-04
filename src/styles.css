@@ -1779,7 +1779,7 @@ body {
 }
 
 .markdown-body {
-  width: min(100%, 1320px);
+  width: 95%;
   margin: 0 auto;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -1877,14 +1877,23 @@ body {
 }
 
 /* Tables styling */
-.markdown-body table {
+.markdown-table-scroll {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  margin-bottom: 24px;
-  overflow: hidden;
+  max-width: 100%;
+  margin: 0 0 24px;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown-body table {
+  width: max(100%, calc(var(--markdown-table-columns, 1) * 160px));
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 0;
 }
 
 .markdown-body th,
@@ -1893,11 +1902,36 @@ body {
   border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
   font-size: 14px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: top;
+}
+
+/* Reset margins for elements inside table cells to prevent abnormal heights */
+.markdown-body td > p,
+.markdown-body th > p,
+.markdown-body td > ul,
+.markdown-body th > ul,
+.markdown-body td > ol,
+.markdown-body th > ol {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.markdown-body td > p + p {
+  margin-top: 8px;
 }
 
 .markdown-body th:last-child,
 .markdown-body td:last-child {
   border-right: 0;
+  width: 100%;
+  min-width: 180px; /* Prevent column from being squeezed too narrow, causing extreme height */
+}
+
+.markdown-body th:not(:last-child),
+.markdown-body td:not(:last-child) {
+  white-space: nowrap;
 }
 
 .markdown-body tr:last-child td {
