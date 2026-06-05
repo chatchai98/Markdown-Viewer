@@ -23,6 +23,16 @@ import {
   Info,
   ExternalLink,
   X,
+  Search,
+  ChevronUp,
+  ChevronDown,
+  ListTree,
+  Maximize2,
+  Minimize2,
+  Table2,
+  WrapText,
+  Type,
+  PanelLeft,
 } from "lucide-react";
 import { FileLoader } from "./components/FileLoader";
 import { MarkdownViewer } from "./components/MarkdownViewer";
@@ -57,6 +67,11 @@ type Theme =
 
 type ViewMode = "edit" | "preview" | "split";
 type Language = "en" | "th";
+type HeadingItem = {
+  id: string;
+  text: string;
+  level: number;
+};
 
 const themeOptions: Array<{ value: Theme; label: string; previewClass: string; group: "dark" | "pastel" }> = [
   { value: "midnight-dark", label: "Midnight", previewClass: "midnight-preview", group: "dark" },
@@ -95,6 +110,68 @@ function formatDateTime(timestamp: number | undefined) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function slugifyHeading(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+function stripMarkdownFormatting(text: string): string {
+  return text
+    // Strip links: [Text](url) -> Text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    // Strip images: ![Alt](url) -> empty
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+    // Strip bold/italic: **bold**, *italic*, __bold__, _italic_
+    .replace(/[\*_]{1,3}([^*_]+)[\*_]{1,3}/g, "$1")
+    // Strip inline code: `code` -> code
+    .replace(/`([^`]+)`/g, "$1");
+}
+
+function extractHeadings(markdown: string): HeadingItem[] {
+  // Strip code blocks to avoid extracting headers from inside them
+  const cleanedMarkdown = markdown.replace(/```[\s\S]*?```/g, "");
+  const usedIds = new Map<string, number>();
+
+  return cleanedMarkdown
+    .split(/\r?\n/)
+    .map((line) => /^(#{1,3})\s+(.+?)\s*#*$/.exec(line.trim()))
+    .filter((match): match is RegExpExecArray => Boolean(match))
+    .map((match) => {
+      const rawText = match[2].trim();
+      const text = stripMarkdownFormatting(rawText);
+      const baseId = slugifyHeading(text) || "section";
+      const count = usedIds.get(baseId) ?? 0;
+      usedIds.set(baseId, count + 1);
+
+      return {
+        id: count === 0 ? baseId : `${baseId}-${count + 1}`,
+        text,
+        level: match[1].length as 1 | 2 | 3,
+      };
+    });
+}
+
+
+function countSearchMatches(markdown: string, query: string) {
+  const trimmedQuery = query.trim().toLowerCase();
+  if (trimmedQuery.length < 2) {
+    return 0;
+  }
+
+  let count = 0;
+  let position = markdown.toLowerCase().indexOf(trimmedQuery);
+  while (position !== -1) {
+    count += 1;
+    position = markdown.toLowerCase().indexOf(trimmedQuery, position + trimmedQuery.length);
+  }
+
+  return count;
 }
 
 const translations = {
@@ -176,6 +253,24 @@ const translations = {
     modifiedUnknown: "Modified time unavailable",
     words: "words",
     minRead: "min read",
+    search: "Search",
+    searchPlaceholder: "Find in document...",
+    searchPrevious: "Previous match",
+    searchNext: "Next match",
+    noMatches: "No matches",
+    outline: "Outline",
+    noOutline: "No headings",
+    readerTools: "Reader Tools",
+    showOutline: "Outline",
+    readMode: "Read Mode",
+    exitReadMode: "Exit Read Mode",
+    fontSize: "Font Size",
+    lineWidth: "Line Width",
+    tableTools: "Tables",
+    wrapTables: "Wrap cells",
+    stickyTables: "Sticky headers",
+    markdownExtras: "Markdown Extras",
+    mermaidDiagrams: "Mermaid diagrams",
     fileLoader: {
       unsupportedFile: "Only .md, .markdown, and .txt files are supported.",
       readError: "Could not read this file.",
@@ -192,6 +287,10 @@ const translations = {
       copied: "Copied",
       mermaid: "Mermaid",
       mermaidError: "Could not render this Mermaid diagram.",
+      copyCsv: "Copy CSV",
+      csvCopied: "CSV copied",
+      csvCopyFailed: "Could not copy CSV.",
+      mermaidDisabled: "Mermaid rendering is disabled.",
     },
     guideRows: [
       ["# Heading 1", "Largest heading"],
@@ -338,11 +437,32 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+  const [showOutline, setShowOutline] = useState(true);
+  const [isReadMode, setIsReadMode] = useState(false);
+  const [fontSize, setFontSize] = useState(16);
+  const [lineWidth, setLineWidth] = useState(95);
+  const [tableWrap, setTableWrap] = useState(false);
+  const [stickyTables, setStickyTables] = useState(true);
+  const [mermaidEnabled, setMermaidEnabled] = useState(true);
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   
   const headerInputRef = useRef<HTMLInputElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const guideRef = useRef<HTMLDivElement | null>(null);
-  const t = translations[language];
+  const t = {
+    ...translations.en,
+    ...translations[language],
+    fileLoader: {
+      ...translations.en.fileLoader,
+      ...translations[language].fileLoader,
+    },
+    markdownViewer: {
+      ...translations.en.markdownViewer,
+      ...translations[language].markdownViewer,
+    },
+  };
 
   const isModified = useMemo(() => {
     if (!loadedFile) return false;
@@ -358,6 +478,12 @@ function App() {
     return { charCount, wordCount, readTime };
   }, [loadedFile, editContent]);
 
+  const headings = useMemo(() => extractHeadings(editContent), [editContent]);
+  const searchMatchCount = useMemo(
+    () => countSearchMatches(editContent, searchQuery),
+    [editContent, searchQuery],
+  );
+
   useEffect(() => {
     setRecentFiles(getRecentFiles());
     const storedLanguage = localStorage.getItem("markdown-viewer:language");
@@ -370,6 +496,29 @@ function App() {
     localStorage.setItem("markdown-viewer:language", language);
     document.documentElement.lang = language;
   }, [language]);
+
+  useEffect(() => {
+    setActiveSearchIndex(0);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (searchMatchCount === 0) {
+      setActiveSearchIndex(0);
+      return;
+    }
+
+    setActiveSearchIndex((current) => Math.min(current, searchMatchCount - 1));
+  }, [searchMatchCount]);
+
+  useEffect(() => {
+    setActiveHeadingId((current) => {
+      if (current && headings.some((heading) => heading.id === current)) {
+        return current;
+      }
+
+      return headings[0]?.id ?? null;
+    });
+  }, [headings]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -392,11 +541,16 @@ function App() {
         if (loadedFile) {
           void handleSaveFile();
         }
+      } else if ((event.ctrlKey || event.metaKey) && event.key === "f" && loadedFile) {
+        event.preventDefault();
+        document.getElementById("document-search")?.focus();
+      } else if (event.key === "Escape" && isReadMode) {
+        setIsReadMode(false);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loadedFile, editContent, fileHandle]);
+  }, [loadedFile, editContent, fileHandle, isReadMode]);
 
   useEffect(() => {
     if (!loadedFile || !fileHandle) {
@@ -461,6 +615,11 @@ function App() {
     setError(null);
     setViewMode("preview");
     setSaveStatus("idle");
+    setSearchQuery("");
+    setActiveSearchIndex(0);
+    setShowOutline(true);
+    setIsReadMode(false);
+    setActiveHeadingId(null);
 
     try {
       setRecentFiles(await saveRecentFile(fileWithId));
@@ -665,10 +824,95 @@ function App() {
     }
     setLoadedFile(null);
     setFileHandle(null);
+    setSearchQuery("");
+    setIsReadMode(false);
+    setActiveHeadingId(null);
   }
 
+  function moveSearch(direction: 1 | -1) {
+    if (searchMatchCount === 0) {
+      return;
+    }
+
+    setActiveSearchIndex((current) =>
+      (current + direction + searchMatchCount) % searchMatchCount,
+    );
+  }
+
+  function updateActiveHeading(scrollPane: HTMLElement) {
+    const headingElements = Array.from(
+      scrollPane.querySelectorAll<HTMLElement>("[data-heading-id]"),
+    );
+
+    if (headingElements.length === 0) {
+      setActiveHeadingId(null);
+      return;
+    }
+
+    const paneTop = scrollPane.getBoundingClientRect().top;
+    const threshold = paneTop + 80;
+    const currentHeading =
+      [...headingElements]
+        .reverse()
+        .find((heading) => heading.getBoundingClientRect().top <= threshold) ??
+      headingElements[0];
+
+    setActiveHeadingId(currentHeading.dataset.headingId ?? null);
+  }
+
+  function scrollToHeading(id: string) {
+    setActiveHeadingId(id);
+
+    const target =
+      Array.from(document.querySelectorAll<HTMLElement>("[data-heading-id]")).find(
+        (heading) => heading.dataset.headingId === id,
+      ) ??
+      document.getElementById(id);
+
+    if (!target) {
+      return;
+    }
+
+    const scrollPane = target.closest<HTMLElement>(".viewer-content, .preview-pane");
+    if (!scrollPane) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    const targetTop = target.getBoundingClientRect().top;
+    const paneTop = scrollPane.getBoundingClientRect().top;
+    scrollPane.scrollTo({
+      top: scrollPane.scrollTop + targetTop - paneTop - 16,
+      behavior: "smooth",
+    });
+  }
+
+  const viewerProps = {
+    markdown: editContent,
+    labels: t.markdownViewer,
+    searchQuery,
+    activeSearchIndex,
+    fontSize,
+    lineWidth,
+    tableWrap,
+    stickyTables,
+    mermaidEnabled,
+  };
+
   return (
-    <main className="app" data-theme={theme}>
+    <main className={`app ${isReadMode ? "app-read-mode" : ""}`} data-theme={theme}>
+      {isReadMode && loadedFile && (
+        <button
+          className="btn-exit-read-mode"
+          type="button"
+          title={t.exitReadMode}
+          onClick={() => setIsReadMode(false)}
+        >
+          <Minimize2 size={15} aria-hidden="true" />
+          <span>{t.exitReadMode}</span>
+        </button>
+      )}
+
       <input
         ref={headerInputRef}
         type="file"
@@ -745,6 +989,43 @@ function App() {
         )}        <div className="header-right">
           {loadedFile ? (
             <>
+              <div className="header-search-group">
+                <Search size={14} aria-hidden="true" />
+                <input
+                  id="document-search"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={t.searchPlaceholder}
+                  aria-label={t.search}
+                />
+                <span className="search-count">
+                  {searchQuery.trim().length >= 2
+                    ? searchMatchCount > 0
+                      ? `${activeSearchIndex + 1}/${searchMatchCount}`
+                      : t.noMatches
+                    : ""}
+                </span>
+                <button
+                  className="btn-search-step"
+                  type="button"
+                  title={t.searchPrevious}
+                  onClick={() => moveSearch(-1)}
+                  disabled={searchMatchCount === 0}
+                >
+                  <ChevronUp size={14} aria-hidden="true" />
+                </button>
+                <button
+                  className="btn-search-step"
+                  type="button"
+                  title={t.searchNext}
+                  onClick={() => moveSearch(1)}
+                  disabled={searchMatchCount === 0}
+                >
+                  <ChevronDown size={14} aria-hidden="true" />
+                </button>
+              </div>
+
               {/* Group 1: File Actions */}
               <div className="header-btn-group">
                 <button
@@ -791,6 +1072,28 @@ function App() {
 
               {/* Group 2: Document Actions */}
               <div className="header-btn-group">
+                <button
+                  className={`btn-header-action ${showOutline ? "copied" : ""}`}
+                  type="button"
+                  title={t.outline}
+                  onClick={() => setShowOutline((current) => !current)}
+                >
+                  <PanelLeft size={14} aria-hidden="true" />
+                  <span>{t.outline}</span>
+                </button>
+                <button
+                  className={`btn-header-action ${isReadMode ? "copied" : ""}`}
+                  type="button"
+                  title={isReadMode ? t.exitReadMode : t.readMode}
+                  onClick={() => setIsReadMode((current) => !current)}
+                >
+                  {isReadMode ? (
+                    <Minimize2 size={14} aria-hidden="true" />
+                  ) : (
+                    <Maximize2 size={14} aria-hidden="true" />
+                  )}
+                  <span>{isReadMode ? t.exitReadMode : t.readMode}</span>
+                </button>
                 <button
                   className={copiedRaw ? "btn-header-action copied" : "btn-header-action"}
                   type="button"
@@ -856,6 +1159,24 @@ function App() {
                   onToggle={() => setIsSettingsOpen(!isSettingsOpen)}
                   onLanguageChange={setLanguage}
                   onThemeChange={setTheme}
+                  readerOptions={
+                    loadedFile
+                      ? {
+                          fontSize,
+                          lineWidth,
+                          showOutline,
+                          tableWrap,
+                          stickyTables,
+                          mermaidEnabled,
+                          onFontSizeChange: setFontSize,
+                          onLineWidthChange: setLineWidth,
+                          onShowOutlineChange: setShowOutline,
+                          onTableWrapChange: setTableWrap,
+                          onStickyTablesChange: setStickyTables,
+                          onMermaidEnabledChange: setMermaidEnabled,
+                        }
+                      : undefined
+                  }
                   onAboutOpen={() => {
                     setIsSettingsOpen(false);
                     setIsAboutOpen(true);
@@ -884,7 +1205,13 @@ function App() {
         </div>
       </header>
 
-      <section className="document-shell" aria-label="Markdown preview">
+      <section
+        className={[
+          "document-shell",
+          loadedFile && showOutline && viewMode !== "edit" ? "has-outline" : "",
+        ].join(" ")}
+        aria-label="Markdown preview"
+      >
         {loadedFile ? (
           <div className="viewer-content-wrapper">
             {viewMode === "edit" && (
@@ -899,23 +1226,49 @@ function App() {
               </div>
             )}
             {viewMode === "preview" && (
-              <div className="viewer-content">
-                <MarkdownViewer markdown={editContent} labels={t.markdownViewer} />
+              <div className="reader-layout">
+                {showOutline && (
+                  <OutlinePanel
+                    headings={headings}
+                    activeHeadingId={activeHeadingId}
+                    labels={t}
+                    onSelect={scrollToHeading}
+                  />
+                )}
+                <div
+                  className="viewer-content"
+                  onScroll={(event) => updateActiveHeading(event.currentTarget)}
+                >
+                  <MarkdownViewer {...viewerProps} />
+                </div>
               </div>
             )}
             {viewMode === "split" && (
-              <div className="editor-layout-split">
-                <div className="editor-pane">
-                  <textarea
-                    className="editor-textarea"
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    placeholder={t.typePlaceholder}
-                    spellCheck="false"
+              <div className="reader-layout">
+                {showOutline && (
+                  <OutlinePanel
+                    headings={headings}
+                    activeHeadingId={activeHeadingId}
+                    labels={t}
+                    onSelect={scrollToHeading}
                   />
-                </div>
-                <div className="preview-pane">
-                  <MarkdownViewer markdown={editContent} labels={t.markdownViewer} />
+                )}
+                <div className="editor-layout-split">
+                  <div className="editor-pane">
+                    <textarea
+                      className="editor-textarea"
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      placeholder={t.typePlaceholder}
+                      spellCheck="false"
+                    />
+                  </div>
+                  <div
+                    className="preview-pane"
+                    onScroll={(event) => updateActiveHeading(event.currentTarget)}
+                  >
+                    <MarkdownViewer {...viewerProps} />
+                  </div>
                 </div>
               </div>
             )}
@@ -990,11 +1343,65 @@ type SettingsMenuProps = {
   language: Language;
   theme: Theme;
   labels: typeof translations.en;
+  readerOptions?: {
+    fontSize: number;
+    lineWidth: number;
+    showOutline: boolean;
+    tableWrap: boolean;
+    stickyTables: boolean;
+    mermaidEnabled: boolean;
+    onFontSizeChange: (value: number) => void;
+    onLineWidthChange: (value: number) => void;
+    onShowOutlineChange: (value: boolean) => void;
+    onTableWrapChange: (value: boolean) => void;
+    onStickyTablesChange: (value: boolean) => void;
+    onMermaidEnabledChange: (value: boolean) => void;
+  };
   onToggle: () => void;
   onLanguageChange: (language: Language) => void;
   onThemeChange: (theme: Theme) => void;
   onAboutOpen: () => void;
 };
+
+type OutlinePanelProps = {
+  headings: HeadingItem[];
+  activeHeadingId: string | null;
+  labels: typeof translations.en;
+  onSelect: (id: string) => void;
+};
+
+function OutlinePanel({ headings, activeHeadingId, labels, onSelect }: OutlinePanelProps) {
+  return (
+    <aside className="outline-panel" aria-label={labels.outline}>
+      <div className="outline-panel-header">
+        <ListTree size={14} aria-hidden="true" />
+        <span>{labels.outline}</span>
+      </div>
+      {headings.length > 0 ? (
+        <nav className="outline-list">
+          {headings.map((heading) => (
+            <button
+              key={`${heading.id}-${heading.text}`}
+              className={[
+                "outline-item",
+                `outline-level-${heading.level}`,
+                activeHeadingId === heading.id ? "active" : "",
+              ].join(" ")}
+              type="button"
+              aria-current={activeHeadingId === heading.id ? "location" : undefined}
+              onClick={() => onSelect(heading.id)}
+              title={heading.text}
+            >
+              {heading.text}
+            </button>
+          ))}
+        </nav>
+      ) : (
+        <p className="outline-empty">{labels.noOutline}</p>
+      )}
+    </aside>
+  );
+}
 
 const SettingsMenu = React.forwardRef<HTMLDivElement, SettingsMenuProps>(
   (
@@ -1003,6 +1410,7 @@ const SettingsMenu = React.forwardRef<HTMLDivElement, SettingsMenuProps>(
       language,
       theme,
       labels,
+      readerOptions,
       onToggle,
       onLanguageChange,
       onThemeChange,
@@ -1092,6 +1500,95 @@ const SettingsMenu = React.forwardRef<HTMLDivElement, SettingsMenuProps>(
                 </div>
               </div>
             </div>
+
+            {readerOptions && (
+              <>
+                <div className="dropdown-section">
+                  <span className="section-label">
+                    <Type size={12} aria-hidden="true" />
+                    {labels.readerTools}
+                  </span>
+                  <label className="range-control">
+                    <span>{labels.fontSize}</span>
+                    <input
+                      type="range"
+                      min="14"
+                      max="22"
+                      value={readerOptions.fontSize}
+                      onChange={(event) => readerOptions.onFontSizeChange(Number(event.target.value))}
+                    />
+                    <strong>{readerOptions.fontSize}px</strong>
+                  </label>
+                  <label className="range-control">
+                    <span>{labels.lineWidth}</span>
+                    <input
+                      type="range"
+                      min="65"
+                      max="100"
+                      step="5"
+                      value={readerOptions.lineWidth}
+                      onChange={(event) => readerOptions.onLineWidthChange(Number(event.target.value))}
+                    />
+                    <strong>{readerOptions.lineWidth}%</strong>
+                  </label>
+                  <label className="switch-row">
+                    <span>
+                      <ListTree size={13} aria-hidden="true" />
+                      {labels.showOutline}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={readerOptions.showOutline}
+                      onChange={(event) => readerOptions.onShowOutlineChange(event.target.checked)}
+                    />
+                  </label>
+                </div>
+
+                <div className="dropdown-section">
+                  <span className="section-label">
+                    <Table2 size={12} aria-hidden="true" />
+                    {labels.tableTools}
+                  </span>
+                  <label className="switch-row">
+                    <span>
+                      <WrapText size={13} aria-hidden="true" />
+                      {labels.wrapTables}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={readerOptions.tableWrap}
+                      onChange={(event) => readerOptions.onTableWrapChange(event.target.checked)}
+                    />
+                  </label>
+                  <label className="switch-row">
+                    <span>
+                      <Table2 size={13} aria-hidden="true" />
+                      {labels.stickyTables}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={readerOptions.stickyTables}
+                      onChange={(event) => readerOptions.onStickyTablesChange(event.target.checked)}
+                    />
+                  </label>
+                </div>
+
+                <div className="dropdown-section">
+                  <span className="section-label">
+                    <FileText size={12} aria-hidden="true" />
+                    {labels.markdownExtras}
+                  </span>
+                  <label className="switch-row">
+                    <span>{labels.mermaidDiagrams}</span>
+                    <input
+                      type="checkbox"
+                      checked={readerOptions.mermaidEnabled}
+                      onChange={(event) => readerOptions.onMermaidEnabledChange(event.target.checked)}
+                    />
+                  </label>
+                </div>
+              </>
+            )}
 
             <button className="about-settings-btn" type="button" onClick={onAboutOpen}>
               <span className="about-settings-icon">
