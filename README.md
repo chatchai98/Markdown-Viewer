@@ -4,6 +4,8 @@ Markdown Viewer is a lightweight local-first Markdown reader and editor built wi
 
 ## 📸 Screenshots
 
+<img src="assets/screenshots/main.png" alt="Markdown Viewer main view" width="900" />
+
 <img src="assets/screenshots/light.png" alt="Markdown Viewer light theme" width="900" />
 
 <img src="assets/screenshots/dark.png" alt="Markdown Viewer dark theme" width="900" />
