@@ -15,11 +15,17 @@ Markdown Viewer is a lightweight local-first Markdown reader and editor built wi
 - 🧭 Render Mermaid diagrams from fenced `mermaid` code blocks.
 - 🎨 Highlight code blocks with copy buttons.
 - ✍️ Edit loaded Markdown and save changes when the browser supports the File System Access API.
+- 🪟 Split view mode that keeps the editor and preview scroll positions in sync in both directions for real-time editing.
+- 📑 Document outline panel with scroll-spy highlighting and click-to-jump heading navigation.
+- 📖 Distraction-free Read Mode.
+- 🔎 In-document search with next/previous match navigation.
+- 🔠 Adjustable font size and line width, plus table cell wrapping, sticky table headers, and CSV export from tables.
+- 🌐 Thai and English language switching.
 - 💾 Save As fallback for browsers without direct file write support.
 - 📋 Copy raw Markdown and print/export through the browser print dialog.
 - 🕘 Track recent documents locally using `localStorage` and IndexedDB.
 - 🛡️ Block remote images and sanitize rendered HTML to reduce unsafe content exposure.
-- 🌗 Switch between multiple light and dark themes.
+- 🌗 Switch between multiple light, dark, and pastel themes.
 
 ## 🧰 Tech Stack
 
