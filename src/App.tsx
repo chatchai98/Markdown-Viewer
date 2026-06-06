@@ -451,6 +451,9 @@ function App() {
   const headerInputRef = useRef<HTMLInputElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const guideRef = useRef<HTMLDivElement | null>(null);
+  const splitEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const splitPreviewRef = useRef<HTMLDivElement | null>(null);
+  const syncingPaneRef = useRef<HTMLElement | null>(null);
   const t = {
     ...translations.en,
     ...translations[language],
@@ -860,6 +863,30 @@ function App() {
     setActiveHeadingId(currentHeading.dataset.headingId ?? null);
   }
 
+  function syncSplitScroll(source: HTMLElement) {
+    const target =
+      source === splitEditorRef.current ? splitPreviewRef.current : splitEditorRef.current;
+    if (!target) {
+      return;
+    }
+
+    if (syncingPaneRef.current && syncingPaneRef.current !== source) {
+      return;
+    }
+
+    const sourceRange = source.scrollHeight - source.clientHeight;
+    const targetRange = target.scrollHeight - target.clientHeight;
+    if (sourceRange <= 0 || targetRange <= 0) {
+      return;
+    }
+
+    syncingPaneRef.current = source;
+    target.scrollTop = (source.scrollTop / sourceRange) * targetRange;
+    requestAnimationFrame(() => {
+      syncingPaneRef.current = null;
+    });
+  }
+
   function scrollToHeading(id: string) {
     setActiveHeadingId(id);
 
@@ -1256,16 +1283,22 @@ function App() {
                 <div className="editor-layout-split">
                   <div className="editor-pane">
                     <textarea
+                      ref={splitEditorRef}
                       className="editor-textarea"
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
+                      onScroll={(event) => syncSplitScroll(event.currentTarget)}
                       placeholder={t.typePlaceholder}
                       spellCheck="false"
                     />
                   </div>
                   <div
+                    ref={splitPreviewRef}
                     className="preview-pane"
-                    onScroll={(event) => updateActiveHeading(event.currentTarget)}
+                    onScroll={(event) => {
+                      updateActiveHeading(event.currentTarget);
+                      syncSplitScroll(event.currentTarget);
+                    }}
                   >
                     <MarkdownViewer {...viewerProps} />
                   </div>

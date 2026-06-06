@@ -225,12 +225,29 @@ export function MarkdownViewer({
     "--markdown-line-width": `${lineWidth}%`,
   } as CSSProperties;
   const usedHeadingIds = new Map<string, number>();
+  const headingIdCache = new WeakMap<object, string>();
 
-  function getHeadingId(text: string) {
+  // React (StrictMode) renders each heading component twice in development.
+  // Cache the id by AST node so the second pass reuses it instead of
+  // bumping the counter again, which would desync ids from the outline panel.
+  function getHeadingId(text: string, node: unknown) {
+    if (node && typeof node === "object") {
+      const cached = headingIdCache.get(node);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const baseId = slugify(text) || "section";
     const count = usedHeadingIds.get(baseId) ?? 0;
     usedHeadingIds.set(baseId, count + 1);
-    return count === 0 ? baseId : `${baseId}-${count + 1}`;
+    const id = count === 0 ? baseId : `${baseId}-${count + 1}`;
+
+    if (node && typeof node === "object") {
+      headingIdCache.set(node, id);
+    }
+
+    return id;
   }
 
   return (
@@ -312,19 +329,19 @@ export function MarkdownViewer({
               </a>
             );
           },
-          h1({ children }) {
+          h1({ children, node }) {
             const text = getPlainText(children);
-            const id = getHeadingId(text);
+            const id = getHeadingId(text, node);
             return <h1 id={id} data-heading-id={id}>{children}</h1>;
           },
-          h2({ children }) {
+          h2({ children, node }) {
             const text = getPlainText(children);
-            const id = getHeadingId(text);
+            const id = getHeadingId(text, node);
             return <h2 id={id} data-heading-id={id}>{children}</h2>;
           },
-          h3({ children }) {
+          h3({ children, node }) {
             const text = getPlainText(children);
-            const id = getHeadingId(text);
+            const id = getHeadingId(text, node);
             return <h3 id={id} data-heading-id={id}>{children}</h3>;
           },
           blockquote({ children }) {
