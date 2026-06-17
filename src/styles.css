@@ -260,6 +260,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 0 28px;
   height: 64px;
   border-bottom: 1px solid var(--border);
@@ -273,8 +274,9 @@ body {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .btn-back {
@@ -293,6 +295,19 @@ body {
   cursor: pointer;
   box-shadow: var(--shadow);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-header .btn-back {
+  width: 36px;
+  padding: 0;
+}
+
+.app-header .btn-back > span,
+.app-header .btn-toggle-view > span,
+.app-header .btn-header-action > span,
+.app-header .btn-guide-toggle > span,
+.app-header .btn-settings-toggle > span {
+  display: none;
 }
 
 .btn-back:hover {
@@ -336,6 +351,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
+  gap: 16px;
   height: 28px;
   padding: 0 28px;
   background: color-mix(in srgb, var(--panel) 95%, transparent);
@@ -352,6 +369,7 @@ body {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  max-width: calc(50% - 100px);
 }
 
 .status-icon {
@@ -402,6 +420,25 @@ body {
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  min-width: 0;
+  max-width: calc(50% - 100px);
+  overflow: hidden;
+}
+
+.status-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(220px, 38vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0;
+  pointer-events: none;
 }
 
 .status-item {
@@ -483,9 +520,11 @@ body {
 .btn-toggle-view {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  width: 30px;
   height: 30px;
-  padding: 0 12px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -560,7 +599,11 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .header-search-group {
@@ -568,8 +611,9 @@ body {
   align-items: center;
   gap: 6px;
   height: 36px;
-  min-width: 260px;
-  max-width: 360px;
+  min-width: 180px;
+  width: clamp(180px, 24vw, 320px);
+  max-width: 320px;
   padding: 0 8px 0 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -668,6 +712,7 @@ body {
 
 /* Adjustments for buttons nested inside header-btn-group */
 .header-btn-group .btn-header-action {
+  width: 30px;
   height: 30px;
   border: 0;
   border-radius: 8px;
@@ -675,7 +720,7 @@ body {
   box-shadow: none;
   font-size: 12px;
   font-weight: 600;
-  padding: 0 12px;
+  padding: 0;
   color: var(--text);
   transition: all 0.15s ease;
   opacity: 0.85;
@@ -727,9 +772,11 @@ body {
 .header-btn-group .btn-guide-toggle {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  width: 30px;
   height: 30px;
-  padding: 0 12px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -743,9 +790,11 @@ body {
 .header-btn-group .btn-settings-toggle {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  width: 30px;
   height: 30px;
-  padding: 0 12px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -801,10 +850,12 @@ body {
 }
 
 .guide-dropdown-menu {
-  position: absolute;
-  top: 40px;
-  right: 0;
+  position: fixed;
+  top: 56px;
+  right: 16px;
   width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 72px);
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -912,11 +963,13 @@ body {
 }
 
 .settings-dropdown-menu {
-  position: absolute;
-  top: 40px;
-  right: 0;
+  position: fixed;
+  top: 56px;
+  right: 16px;
   width: 360px;
   max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -2011,6 +2064,34 @@ body {
   margin-bottom: 40px;
 }
 
+.preview-error {
+  width: var(--markdown-line-width, 95%);
+  margin: 16px auto 40px;
+  padding: 20px 24px;
+  border: 1px solid var(--cta);
+  border-radius: 8px;
+  background: var(--cta-soft);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.preview-pane .preview-error {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.preview-error strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--cta-strong);
+  font-size: 14px;
+}
+
+.preview-error p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .viewer-actions-inline .btn-action {
   display: inline-flex;
   align-items: center;
@@ -2521,31 +2602,32 @@ body {
 /* Responsive Media Queries */
 @media (max-width: 900px) {
   .app-header {
-    height: auto;
-    flex-direction: column;
-    padding: 16px;
-    gap: 12px;
+    height: 56px;
+    flex-direction: row;
+    padding: 0 12px;
+    gap: 8px;
   }
 
   .header-left {
-    width: 100%;
-    justify-content: space-between;
+    width: auto;
+    justify-content: flex-start;
   }
 
   .header-right {
-    width: 100%;
-    justify-content: flex-end;
-    flex-wrap: wrap;
+    width: auto;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
   }
 
   .header-search-group {
-    flex: 1 1 260px;
+    flex: 0 1 200px;
     min-width: 0;
-    max-width: none;
+    width: min(200px, 32vw);
+    max-width: 200px;
   }
 
   .header-btn-group {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .document-shell {

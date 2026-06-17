@@ -144,64 +144,72 @@ export function MarkdownViewer({
       return;
     }
 
-    article.querySelectorAll(".search-mark").forEach((mark) => {
-      mark.replaceWith(document.createTextNode(mark.textContent ?? ""));
-    });
-    article.normalize();
+    try {
+      article.querySelectorAll(".search-mark").forEach((mark) => {
+        mark.replaceWith(document.createTextNode(mark.textContent ?? ""));
+      });
+      article.normalize();
 
-    if (query.length < 2) {
-      return;
-    }
-
-    const matcher = query.toLowerCase();
-    const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (!node.textContent?.toLowerCase().includes(matcher)) {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        const parent = node.parentElement;
-        if (!parent || parent.closest("button, textarea, input, .code-card, .diagram-card")) {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-
-    const textNodes: Text[] = [];
-    while (walker.nextNode()) {
-      textNodes.push(walker.currentNode as Text);
-    }
-
-    let matchIndex = 0;
-    for (const textNode of textNodes) {
-      const text = textNode.textContent ?? "";
-      const fragment = document.createDocumentFragment();
-      let cursor = 0;
-      let lowerText = text.toLowerCase();
-      let foundAt = lowerText.indexOf(matcher);
-
-      while (foundAt !== -1) {
-        if (foundAt > cursor) {
-          fragment.append(text.slice(cursor, foundAt));
-        }
-
-        const mark = document.createElement("mark");
-        mark.className = "search-mark";
-        mark.dataset.searchIndex = String(matchIndex);
-        mark.textContent = text.slice(foundAt, foundAt + query.length);
-        fragment.append(mark);
-        matchIndex += 1;
-        cursor = foundAt + query.length;
-        foundAt = lowerText.indexOf(matcher, cursor);
+      if (query.length < 2) {
+        return;
       }
 
-      if (cursor < text.length) {
-        fragment.append(text.slice(cursor));
+      const matcher = query.toLowerCase();
+      const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          if (!node.textContent?.toLowerCase().includes(matcher)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          const parent = node.parentElement;
+          if (!parent || parent.closest("button, textarea, input, .code-card, .diagram-card")) {
+            return NodeFilter.FILTER_REJECT;
+          }
+
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      });
+
+      const textNodes: Text[] = [];
+      while (walker.nextNode()) {
+        textNodes.push(walker.currentNode as Text);
       }
 
-      textNode.parentNode?.replaceChild(fragment, textNode);
+      let matchIndex = 0;
+      for (const textNode of textNodes) {
+        if (!textNode.parentNode) {
+          continue;
+        }
+
+        const text = textNode.textContent ?? "";
+        const fragment = document.createDocumentFragment();
+        let cursor = 0;
+        const lowerText = text.toLowerCase();
+        let foundAt = lowerText.indexOf(matcher);
+
+        while (foundAt !== -1) {
+          if (foundAt > cursor) {
+            fragment.append(text.slice(cursor, foundAt));
+          }
+
+          const mark = document.createElement("mark");
+          mark.className = "search-mark";
+          mark.dataset.searchIndex = String(matchIndex);
+          mark.textContent = text.slice(foundAt, foundAt + query.length);
+          fragment.append(mark);
+          matchIndex += 1;
+          cursor = foundAt + query.length;
+          foundAt = lowerText.indexOf(matcher, cursor);
+        }
+
+        if (cursor < text.length) {
+          fragment.append(text.slice(cursor));
+        }
+
+        textNode.parentNode.replaceChild(fragment, textNode);
+      }
+    } catch (error) {
+      console.warn("Search highlighting failed", error);
     }
   }, [markdown, searchQuery]);
 

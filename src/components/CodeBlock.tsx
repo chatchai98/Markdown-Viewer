@@ -56,14 +56,20 @@ function HighlightedCodeBlock({
     let isCurrent = true;
 
     async function highlightCode() {
-      const hljs = (await import("highlight.js/lib/common")).default;
-      const result =
-        language && hljs.getLanguage(language)
-          ? hljs.highlight(code, { language }).value
-          : hljs.highlightAuto(code).value;
+      try {
+        const hljs = (await import("highlight.js/lib/common")).default;
+        const result =
+          language && hljs.getLanguage(language)
+            ? hljs.highlight(code, { language }).value
+            : hljs.highlightAuto(code).value;
 
-      if (isCurrent) {
-        setHighlighted(result);
+        if (isCurrent) {
+          setHighlighted(result);
+        }
+      } catch {
+        if (isCurrent) {
+          setHighlighted(null);
+        }
       }
     }
 
@@ -138,6 +144,11 @@ function MermaidBlock({
 
     async function renderDiagram() {
       try {
+        if (isCurrent) {
+          setSvg("");
+          setError(null);
+        }
+
         const mermaid = (await import("mermaid")).default;
         mermaid.initialize({
           startOnLoad: false,

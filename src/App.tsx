@@ -4,6 +4,7 @@ import {
   Clock3,
   Eraser,
   FileText,
+  Plus,
   MonitorCheck,
   ArrowLeft,
   Copy,
@@ -57,6 +58,10 @@ type LoadedFile = {
   lastModified?: number;
 };
 
+type FileRef =
+  | { kind: "browser"; handle: FileSystemFileHandle }
+  | { kind: "desktop"; path: string };
+
 type Theme =
   | "midnight-dark"
   | "forest-dark"
@@ -91,10 +96,86 @@ const appVersion = "0.1.0";
 const githubUrl = "https://github.com/chatchai98/Markdown-Viewer";
 const appCreator = "chatchai98";
 const copyrightYear = "2026";
+const storageKeys = {
+  language: "markdown-viewer:language",
+  theme: "markdown-viewer:theme",
+  readerSettings: "markdown-viewer:reader-settings",
+} as const;
+const defaultReaderSettings = {
+  showOutline: true,
+  fontSize: 16,
+  lineWidth: 95,
+  tableWrap: false,
+  stickyTables: true,
+  mermaidEnabled: true,
+};
 
-function getDisplayPath(file: File, handle?: FileSystemFileHandle | null) {
+type ReaderSettings = typeof defaultReaderSettings;
+
+function getDisplayPath(file: File) {
   const fileWithPath = file as File & { path?: string };
   return fileWithPath.path || file.webkitRelativePath || undefined;
+}
+
+function readStorageValue(key: string) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorageValue(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore unavailable storage; settings can fall back to defaults.
+  }
+}
+
+function isTheme(value: string | null): value is Theme {
+  return Boolean(value && themeOptions.some((option) => option.value === value));
+}
+
+function isLanguage(value: string | null): value is Language {
+  return value === "en" || value === "th";
+}
+
+function getStoredTheme(): Theme {
+  const storedTheme = readStorageValue(storageKeys.theme);
+  return isTheme(storedTheme) ? storedTheme : "lavender-pastel";
+}
+
+function getStoredLanguage(): Language {
+  const storedLanguage = readStorageValue(storageKeys.language);
+  return isLanguage(storedLanguage) ? storedLanguage : "en";
+}
+
+function getStoredReaderSettings(): ReaderSettings {
+  const storedSettings = readStorageValue(storageKeys.readerSettings);
+  if (!storedSettings) {
+    return defaultReaderSettings;
+  }
+
+  try {
+    const parsed = JSON.parse(storedSettings) as Partial<ReaderSettings>;
+    return {
+      showOutline: typeof parsed.showOutline === "boolean" ? parsed.showOutline : defaultReaderSettings.showOutline,
+      fontSize: getBoundedNumber(parsed.fontSize, defaultReaderSettings.fontSize, 14, 22),
+      lineWidth: getBoundedNumber(parsed.lineWidth, defaultReaderSettings.lineWidth, 65, 100),
+      tableWrap: typeof parsed.tableWrap === "boolean" ? parsed.tableWrap : defaultReaderSettings.tableWrap,
+      stickyTables: typeof parsed.stickyTables === "boolean" ? parsed.stickyTables : defaultReaderSettings.stickyTables,
+      mermaidEnabled: typeof parsed.mermaidEnabled === "boolean" ? parsed.mermaidEnabled : defaultReaderSettings.mermaidEnabled,
+    };
+  } catch {
+    return defaultReaderSettings;
+  }
+}
+
+function getBoundedNumber(value: unknown, fallback: number, min: number, max: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, value))
+    : fallback;
 }
 
 function getDistinctPath(path: string | undefined, name: string) {
@@ -185,6 +266,9 @@ const translations = {
     editTitle: "Editor Mode",
     splitTitle: "Split Mode",
     previewTitle: "Preview Mode",
+    newFile: "New File",
+    newFileTitle: "Create a new Markdown file",
+    untitledFileName: "Untitled.md",
     open: "Open",
     openTitle: "Open another file",
     save: "Save",
@@ -271,6 +355,8 @@ const translations = {
     stickyTables: "Sticky headers",
     markdownExtras: "Markdown Extras",
     mermaidDiagrams: "Mermaid diagrams",
+    previewRenderError: "Markdown preview could not render this edit.",
+    previewRenderHint: "Keep editing or remove the last incomplete Markdown tag.",
     fileLoader: {
       unsupportedFile: "Only .md, .markdown, and .txt files are supported.",
       readError: "Could not read this file.",
@@ -319,6 +405,9 @@ const translations = {
     editTitle: "โหมดแก้ไข",
     splitTitle: "โหมดแบ่งจอ",
     previewTitle: "โหมดพรีวิว",
+    newFile: "ไฟล์ใหม่",
+    newFileTitle: "สร้างไฟล์ Markdown ใหม่",
+    untitledFileName: "Untitled.md",
     open: "เปิดไฟล์",
     openTitle: "เปิดไฟล์อื่น",
     save: "บันทึก",
@@ -423,14 +512,76 @@ const translations = {
   },
 } satisfies Record<Language, Record<string, any>>;
 
+type MarkdownPreviewBoundaryProps = {
+  resetKey: string;
+  labels: {
+    previewRenderError: string;
+    previewRenderHint: string;
+  };
+  children: React.ReactNode;
+};
+
+type MarkdownPreviewBoundaryState = {
+  error: string | null;
+  resetKey: string;
+};
+
+class MarkdownPreviewBoundary extends React.Component<
+  MarkdownPreviewBoundaryProps,
+  MarkdownPreviewBoundaryState
+> {
+  state: MarkdownPreviewBoundaryState = {
+    error: null,
+    resetKey: this.props.resetKey,
+  };
+
+  static getDerivedStateFromProps(
+    props: MarkdownPreviewBoundaryProps,
+    state: MarkdownPreviewBoundaryState,
+  ): Partial<MarkdownPreviewBoundaryState> | null {
+    if (props.resetKey !== state.resetKey) {
+      return {
+        error: null,
+        resetKey: props.resetKey,
+      };
+    }
+
+    return null;
+  }
+
+  static getDerivedStateFromError(error: unknown): Partial<MarkdownPreviewBoundaryState> {
+    return {
+      error: error instanceof Error ? error.message : "Unknown render error",
+    };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error("Markdown preview failed", error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="preview-error" role="alert">
+          <strong>{this.props.labels.previewRenderError}</strong>
+          <p>{this.props.labels.previewRenderHint}</p>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 function App() {
   const [loadedFile, setLoadedFile] = useState<LoadedFile | null>(null);
   const [editContent, setEditContent] = useState<string>("");
-  const [fileHandle, setFileHandle] = useState<FileSystemFileHandle | null>(null);
+  const [previewContent, setPreviewContent] = useState<string>("");
+  const [fileRef, setFileRef] = useState<FileRef | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [theme, setTheme] = useState<Theme>("lavender-pastel");
-  const [language, setLanguage] = useState<Language>("en");
+  const [theme, setTheme] = useState<Theme>(getStoredTheme);
+  const [language, setLanguage] = useState<Language>(getStoredLanguage);
   const [error, setError] = useState<string | null>(null);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [copiedRaw, setCopiedRaw] = useState(false);
@@ -439,13 +590,13 @@ function App() {
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
-  const [showOutline, setShowOutline] = useState(true);
+  const [showOutline, setShowOutline] = useState(() => getStoredReaderSettings().showOutline);
   const [isReadMode, setIsReadMode] = useState(false);
-  const [fontSize, setFontSize] = useState(16);
-  const [lineWidth, setLineWidth] = useState(95);
-  const [tableWrap, setTableWrap] = useState(false);
-  const [stickyTables, setStickyTables] = useState(true);
-  const [mermaidEnabled, setMermaidEnabled] = useState(true);
+  const [fontSize, setFontSize] = useState(() => getStoredReaderSettings().fontSize);
+  const [lineWidth, setLineWidth] = useState(() => getStoredReaderSettings().lineWidth);
+  const [tableWrap, setTableWrap] = useState(() => getStoredReaderSettings().tableWrap);
+  const [stickyTables, setStickyTables] = useState(() => getStoredReaderSettings().stickyTables);
+  const [mermaidEnabled, setMermaidEnabled] = useState(() => getStoredReaderSettings().mermaidEnabled);
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   
   const headerInputRef = useRef<HTMLInputElement | null>(null);
@@ -481,47 +632,70 @@ function App() {
     return { charCount, wordCount, readTime };
   }, [loadedFile, editContent]);
 
-  const headings = useMemo(() => extractHeadings(editContent), [editContent]);
+  const headings = useMemo(() => extractHeadings(previewContent), [previewContent]);
   const searchMatchCount = useMemo(
-    () => countSearchMatches(editContent, searchQuery),
-    [editContent, searchQuery],
+    () => countSearchMatches(previewContent, searchQuery),
+    [previewContent, searchQuery],
   );
 
   useEffect(() => {
     setRecentFiles(getRecentFiles());
-    const storedLanguage = localStorage.getItem("markdown-viewer:language");
-    if (storedLanguage === "en" || storedLanguage === "th") {
-      setLanguage(storedLanguage);
-    }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("markdown-viewer:language", language);
+    writeStorageValue(storageKeys.language, language);
     document.documentElement.lang = language;
   }, [language]);
 
   useEffect(() => {
-    setActiveSearchIndex(0);
-  }, [searchQuery]);
+    writeStorageValue(storageKeys.theme, theme);
+  }, [theme]);
 
   useEffect(() => {
-    if (searchMatchCount === 0) {
+    writeStorageValue(
+      storageKeys.readerSettings,
+      JSON.stringify({
+        showOutline,
+        fontSize,
+        lineWidth,
+        tableWrap,
+        stickyTables,
+        mermaidEnabled,
+      }),
+    );
+  }, [showOutline, fontSize, lineWidth, tableWrap, stickyTables, mermaidEnabled]);
+
+  useEffect(() => {
+    if (activeSearchIndex !== 0) {
       setActiveSearchIndex(0);
-      return;
     }
-
-    setActiveSearchIndex((current) => Math.min(current, searchMatchCount - 1));
-  }, [searchMatchCount]);
+  }, [activeSearchIndex, searchQuery]);
 
   useEffect(() => {
-    setActiveHeadingId((current) => {
-      if (current && headings.some((heading) => heading.id === current)) {
-        return current;
-      }
+    const maxSearchIndex = Math.max(0, searchMatchCount - 1);
+    if (activeSearchIndex > maxSearchIndex) {
+      setActiveSearchIndex(maxSearchIndex);
+    }
+  }, [activeSearchIndex, searchMatchCount]);
 
-      return headings[0]?.id ?? null;
-    });
-  }, [headings]);
+  useEffect(() => {
+    const nextHeadingId =
+      activeHeadingId && headings.some((heading) => heading.id === activeHeadingId)
+        ? activeHeadingId
+        : headings[0]?.id ?? null;
+
+    if (activeHeadingId !== nextHeadingId) {
+      setActiveHeadingId(nextHeadingId);
+    }
+  }, [activeHeadingId, headings]);
+
+  useEffect(() => {
+    const previewUpdateId = window.setTimeout(() => {
+      setPreviewContent(editContent);
+    }, 80);
+
+    return () => window.clearTimeout(previewUpdateId);
+  }, [editContent]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -553,44 +727,59 @@ function App() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loadedFile, editContent, fileHandle, isReadMode]);
+  }, [loadedFile, editContent, fileRef, isReadMode]);
 
   useEffect(() => {
-    if (!loadedFile || !fileHandle) {
+    if (!loadedFile || !fileRef) {
       return;
     }
 
     const activeFile = loadedFile;
-    const activeHandle = fileHandle;
+    const activeRef = fileRef;
     let isCurrent = true;
 
     async function syncExternalChanges() {
       try {
-        const diskFile = await activeHandle.getFile();
-        if (!isCurrent || diskFile.lastModified === activeFile.lastModified) {
-          return;
+        let nextFile: LoadedFile;
+
+        if (activeRef.kind === "desktop") {
+          const desktopApi = window.markdownViewerDesktop;
+          if (!desktopApi) {
+            return;
+          }
+
+          nextFile = {
+            ...(await desktopApi.readFile(activeRef.path)),
+            id: activeFile.id,
+          };
+        } else {
+          const diskFile = await activeRef.handle.getFile();
+          const nextContent = await diskFile.text();
+          nextFile = {
+            id: activeFile.id,
+            name: diskFile.name,
+            path: getDisplayPath(diskFile),
+            size: diskFile.size,
+            content: nextContent,
+            lastModified: diskFile.lastModified,
+          };
         }
 
-        const nextContent = await diskFile.text();
-        const nextFile = {
-          id: activeFile.id,
-          name: diskFile.name,
-          path: getDisplayPath(diskFile, activeHandle),
-          size: diskFile.size,
-          content: nextContent,
-          lastModified: diskFile.lastModified,
-        };
+        if (!isCurrent || nextFile.lastModified === activeFile.lastModified) {
+          return;
+        }
 
         if (editContent !== activeFile.content) {
           setError(t.externalChangeConflict);
           setLoadedFile((current) =>
-            current ? { ...current, lastModified: diskFile.lastModified } : current,
+            current ? { ...current, lastModified: nextFile.lastModified } : current,
           );
           return;
         }
 
         setLoadedFile(nextFile);
-        setEditContent(nextContent);
+        setEditContent(nextFile.content);
+        setPreviewContent(nextFile.content);
         setError(t.syncedFromDisk);
         setRecentFiles(await saveRecentFile(nextFile));
       } catch {
@@ -606,21 +795,21 @@ function App() {
       isCurrent = false;
       window.clearInterval(intervalId);
     };
-  }, [loadedFile, editContent, fileHandle, t.externalChangeConflict, t.syncedFromDisk]);
+  }, [loadedFile, editContent, fileRef, t.externalChangeConflict, t.syncedFromDisk]);
 
-  async function handleLoadFile(file: LoadedFile, handle: FileSystemFileHandle | null = null) {
+  async function handleLoadFile(file: LoadedFile, ref: FileRef | null = null) {
     const fileId = file.id || createFileId(file.name, file.path, file.size, file.content, file.lastModified);
     const fileWithId = { ...file, id: fileId };
 
     setLoadedFile(fileWithId);
     setEditContent(file.content);
-    setFileHandle(handle);
+    setPreviewContent(file.content);
+    setFileRef(ref);
     setError(null);
     setViewMode("preview");
     setSaveStatus("idle");
     setSearchQuery("");
     setActiveSearchIndex(0);
-    setShowOutline(true);
     setIsReadMode(false);
     setActiveHeadingId(null);
 
@@ -631,8 +820,47 @@ function App() {
     }
   }
 
+  function handleNewFile() {
+    if (isModified && !window.confirm(t.confirmBack)) {
+      return;
+    }
+
+    const now = Date.now();
+    const newFile: LoadedFile = {
+      id: createFileId(t.untitledFileName, undefined, 0, "", now),
+      name: t.untitledFileName,
+      size: 0,
+      content: "",
+      lastModified: now,
+    };
+
+    setLoadedFile(newFile);
+    setEditContent("");
+    setPreviewContent("");
+    setFileRef(null);
+    setError(null);
+    setViewMode("edit");
+    setSaveStatus("idle");
+    setSearchQuery("");
+    setActiveSearchIndex(0);
+    setIsReadMode(false);
+    setActiveHeadingId(null);
+  }
+
   async function handleOpenRecent(id: string) {
     try {
+      const recentFile = getRecentFiles().find((item) => item.id === id);
+      const desktopApi = window.markdownViewerDesktop;
+      if (desktopApi && recentFile?.path) {
+        try {
+          const diskFile = await desktopApi.readFile(recentFile.path);
+          await handleLoadFile({ ...diskFile, id }, { kind: "desktop", path: diskFile.path });
+          return;
+        } catch {
+          // Fall back to the locally cached snapshot below.
+        }
+      }
+
       const file = await openRecentFile(id);
       if (!file) {
         setError(t.recentUnavailable);
@@ -690,6 +918,15 @@ function App() {
 
   async function triggerOpenFilePicker() {
     try {
+      const desktopApi = window.markdownViewerDesktop;
+      if (desktopApi) {
+        const file = await desktopApi.openFile();
+        if (file) {
+          void handleLoadFile(file, { kind: "desktop", path: file.path });
+        }
+        return;
+      }
+
       const win = window as any;
       if ("showOpenFilePicker" in win) {
         const [handle] = await win.showOpenFilePicker({
@@ -705,11 +942,11 @@ function App() {
         const content = await file.text();
         void handleLoadFile({
           name: file.name,
-          path: getDisplayPath(file, handle),
+          path: getDisplayPath(file),
           size: file.size,
           content,
           lastModified: file.lastModified,
-        }, handle);
+        }, { kind: "browser", handle });
       } else {
         headerInputRef.current?.click();
       }
@@ -722,8 +959,25 @@ function App() {
     if (!loadedFile) return;
     setSaveStatus("saving");
     try {
-      if (fileHandle) {
-        const handleAny = fileHandle as any;
+      if (fileRef?.kind === "desktop") {
+        const savedFile = await window.markdownViewerDesktop?.saveFile(fileRef.path, editContent);
+        if (!savedFile) {
+          throw new Error("Desktop file API unavailable.");
+        }
+
+        const updatedFile = {
+          ...savedFile,
+          id: loadedFile.id,
+        };
+        setLoadedFile(updatedFile);
+        setFileRef({ kind: "desktop", path: savedFile.path });
+
+        const updatedRecent = await saveRecentFile(updatedFile);
+        setRecentFiles(updatedRecent);
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 1500);
+      } else if (fileRef?.kind === "browser") {
+        const handleAny = fileRef.handle as any;
         const opts = { mode: "readwrite" as const };
         if (typeof handleAny.queryPermission === "function" && (await handleAny.queryPermission(opts)) !== "granted") {
           if (typeof handleAny.requestPermission === "function" && (await handleAny.requestPermission(opts)) !== "granted") {
@@ -735,7 +989,7 @@ function App() {
         await writable.write(editContent);
         await writable.close();
 
-        const savedFile = await fileHandle.getFile();
+        const savedFile = await fileRef.handle.getFile();
         const sizeBytes = savedFile.size;
         const updatedFile = {
           ...loadedFile,
@@ -763,6 +1017,29 @@ function App() {
     if (!loadedFile) return;
     setSaveStatus("saving");
     try {
+      const desktopApi = window.markdownViewerDesktop;
+      if (desktopApi) {
+        const savedFile = await desktopApi.saveFileAs(loadedFile.name, editContent);
+        if (!savedFile) {
+          setSaveStatus("idle");
+          return;
+        }
+
+        const newId = createFileId(savedFile.name, savedFile.path, savedFile.size, savedFile.content, savedFile.lastModified);
+        const newFile = {
+          ...savedFile,
+          id: newId,
+        };
+        setLoadedFile(newFile);
+        setFileRef({ kind: "desktop", path: savedFile.path });
+
+        const updatedRecent = await saveRecentFile(newFile);
+        setRecentFiles(updatedRecent);
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 1500);
+        return;
+      }
+
       const win = window as any;
       if ("showSaveFilePicker" in win) {
         const handle = await win.showSaveFilePicker({
@@ -782,11 +1059,11 @@ function App() {
         await writable.write(editContent);
         await writable.close();
 
-        setFileHandle(handle);
+        setFileRef({ kind: "browser", handle });
         
         const savedFile = await handle.getFile();
         const sizeBytes = savedFile.size;
-        const path = getDisplayPath(savedFile, handle);
+        const path = getDisplayPath(savedFile);
         const newId = createFileId(savedFile.name, path, sizeBytes, editContent, savedFile.lastModified);
         const newFile = {
           id: newId,
@@ -826,7 +1103,7 @@ function App() {
       if (!confirm) return;
     }
     setLoadedFile(null);
-    setFileHandle(null);
+    setFileRef(null);
     setSearchQuery("");
     setIsReadMode(false);
     setActiveHeadingId(null);
@@ -915,7 +1192,7 @@ function App() {
   }
 
   const viewerProps = {
-    markdown: editContent,
+    markdown: previewContent,
     labels: t.markdownViewer,
     searchQuery,
     activeSearchIndex,
@@ -971,14 +1248,12 @@ function App() {
               type="button"
               onClick={handleBack}
               title={t.backTitle}
+              aria-label={t.backTitle}
             >
               <ArrowLeft size={16} aria-hidden="true" />
               <span>{t.back}</span>
             </button>
           ) : null}
-          <div className="app-logo">
-            <h1>{t.appName}</h1>
-          </div>
         </div>
 
         {loadedFile && (
@@ -988,15 +1263,16 @@ function App() {
                 className={`btn-toggle-view ${viewMode === "edit" ? "active" : ""}`}
                 type="button"
                 title={t.editTitle}
+                aria-label={t.editTitle}
                 onClick={() => setViewMode("edit")}
               >
                 <Edit3 size={13} aria-hidden="true" />
-                <span>{t.edit}</span>
               </button>
               <button
                 className={`btn-toggle-view ${viewMode === "split" ? "active" : ""}`}
                 type="button"
                 title={t.splitTitle}
+                aria-label={t.splitTitle}
                 onClick={() => setViewMode("split")}
               >
                 <Columns size={13} aria-hidden="true" />
@@ -1006,6 +1282,7 @@ function App() {
                 className={`btn-toggle-view ${viewMode === "preview" ? "active" : ""}`}
                 type="button"
                 title={t.previewTitle}
+                aria-label={t.previewTitle}
                 onClick={() => setViewMode("preview")}
               >
                 <Eye size={13} aria-hidden="true" />
@@ -1058,7 +1335,18 @@ function App() {
                 <button
                   className="btn-header-action"
                   type="button"
+                  title={t.newFileTitle}
+                  aria-label={t.newFileTitle}
+                  onClick={handleNewFile}
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  <span>{t.newFile}</span>
+                </button>
+                <button
+                  className="btn-header-action"
+                  type="button"
                   title={t.openTitle}
+                  aria-label={t.openTitle}
                   onClick={() => void triggerOpenFilePicker()}
                 >
                   <FileUp size={14} aria-hidden="true" />
@@ -1068,6 +1356,7 @@ function App() {
                   className={`btn-header-action btn-save ${isModified ? "modified" : ""} ${saveStatus === "saved" ? "saved" : ""}`}
                   type="button"
                   title={t.saveTitle}
+                  aria-label={t.saveTitle}
                   onClick={() => void handleSaveFile()}
                   disabled={saveStatus === "saving"}
                 >
@@ -1090,6 +1379,7 @@ function App() {
                   className="btn-header-action"
                   type="button"
                   title={t.saveAsTitle}
+                  aria-label={t.saveAsTitle}
                   onClick={() => void handleSaveAsFile()}
                 >
                   <Download size={14} aria-hidden="true" />
@@ -1103,6 +1393,7 @@ function App() {
                   className={`btn-header-action ${showOutline ? "copied" : ""}`}
                   type="button"
                   title={t.outline}
+                  aria-label={t.outline}
                   onClick={() => setShowOutline((current) => !current)}
                 >
                   <PanelLeft size={14} aria-hidden="true" />
@@ -1112,6 +1403,7 @@ function App() {
                   className={`btn-header-action ${isReadMode ? "copied" : ""}`}
                   type="button"
                   title={isReadMode ? t.exitReadMode : t.readMode}
+                  aria-label={isReadMode ? t.exitReadMode : t.readMode}
                   onClick={() => setIsReadMode((current) => !current)}
                 >
                   {isReadMode ? (
@@ -1125,6 +1417,7 @@ function App() {
                   className={copiedRaw ? "btn-header-action copied" : "btn-header-action"}
                   type="button"
                   title={t.copyRawTitle}
+                  aria-label={t.copyRawTitle}
                   onClick={() => void handleCopyRaw()}
                 >
                   {copiedRaw ? (
@@ -1138,6 +1431,7 @@ function App() {
                   className="btn-header-action"
                   type="button"
                   title={t.printTitle}
+                  aria-label={t.printTitle}
                   onClick={() => window.print()}
                 >
                   <Printer size={14} aria-hidden="true" />
@@ -1153,6 +1447,7 @@ function App() {
                       className={`btn-guide-toggle ${isGuideOpen ? "active" : ""}`}
                       type="button"
                       title={t.guideTitle}
+                      aria-label={t.guideTitle}
                       onClick={() => setIsGuideOpen(!isGuideOpen)}
                     >
                       <HelpCircle size={14} aria-hidden="true" />
@@ -1213,6 +1508,16 @@ function App() {
             </>
           ) : (
             <div className="header-btn-group">
+              <button
+                className="btn-header-action"
+                type="button"
+                title={t.newFileTitle}
+                aria-label={t.newFileTitle}
+                onClick={handleNewFile}
+              >
+                <Plus size={14} aria-hidden="true" />
+                <span>{t.newFile}</span>
+              </button>
               <SettingsMenu
                 ref={settingsRef}
                 isOpen={isSettingsOpen}
@@ -1266,7 +1571,9 @@ function App() {
                   className="viewer-content"
                   onScroll={(event) => updateActiveHeading(event.currentTarget)}
                 >
-                  <MarkdownViewer {...viewerProps} />
+                  <MarkdownPreviewBoundary resetKey={previewContent} labels={t}>
+                    <MarkdownViewer {...viewerProps} />
+                  </MarkdownPreviewBoundary>
                 </div>
               </div>
             )}
@@ -1300,7 +1607,9 @@ function App() {
                       syncSplitScroll(event.currentTarget);
                     }}
                   >
-                    <MarkdownViewer {...viewerProps} />
+                    <MarkdownPreviewBoundary resetKey={previewContent} labels={t}>
+                      <MarkdownViewer {...viewerProps} />
+                    </MarkdownPreviewBoundary>
                   </div>
                 </div>
               </div>
@@ -1312,6 +1621,7 @@ function App() {
             error={error}
             onLoadFile={(file) => void handleLoadFile(file)}
             onError={setError}
+            onBrowseFile={() => void triggerOpenFilePicker()}
             onOpenRecent={(id) => void handleOpenRecent(id)}
             onClearRecent={() => void handleClearRecent()}
             onDeleteRecent={handleDeleteRecent}
@@ -1321,8 +1631,9 @@ function App() {
         )}
       </section>
 
-      {loadedFile && (
-        <footer className="status-bar">
+      <footer className="status-bar">
+        {loadedFile ? (
+          <>
           <div className="status-left">
             <FileText size={12} className="status-icon" aria-hidden="true" />
             <span className="status-file-name" title={loadedFile.name}>
@@ -1337,7 +1648,7 @@ function App() {
               </span>
             )}
             {isModified && <span className="status-modified-dot" title={t.unsavedChanges}>•</span>}
-            {fileHandle && <span className="status-sync-badge">{t.syncLive}</span>}
+            {fileRef && <span className="status-sync-badge">{t.syncLive}</span>}
           </div>
           <div className="status-right">
             <span className="status-item">{formatBytes(new Blob([editContent]).size)}</span>
@@ -1361,8 +1672,17 @@ function App() {
               </>
             )}
           </div>
-        </footer>
-      )}
+          </>
+        ) : (
+          <>
+            <div className="status-left" />
+            <div className="status-right" />
+          </>
+        )}
+        <div className="status-center" aria-label={t.appName}>
+          {t.appName}
+        </div>
+      </footer>
 
       {isAboutOpen && (
         <AboutDialog labels={t} onClose={() => setIsAboutOpen(false)} />
@@ -1457,6 +1777,7 @@ const SettingsMenu = React.forwardRef<HTMLDivElement, SettingsMenuProps>(
           className={`btn-settings-toggle ${isOpen ? "active" : ""}`}
           type="button"
           title={labels.settingsTitle}
+          aria-label={labels.settingsTitle}
           onClick={onToggle}
           aria-expanded={isOpen}
         >
@@ -1704,6 +2025,7 @@ type HomeScreenProps = {
   error: string | null;
   onLoadFile: (file: LoadedFile) => void;
   onError: (message: string) => void;
+  onBrowseFile: () => void;
   onOpenRecent: (id: string) => void;
   onClearRecent: () => void;
   onDeleteRecent: (id: string, event: React.MouseEvent) => void;
@@ -1716,6 +2038,7 @@ function HomeScreen({
   error,
   onLoadFile,
   onError,
+  onBrowseFile,
   onOpenRecent,
   onClearRecent,
   onDeleteRecent,
@@ -1742,7 +2065,13 @@ function HomeScreen({
         <p className="hero-description">
           {labels.heroDescription}
         </p>
-        <FileLoader onLoad={onLoadFile} onError={onError} variant="hero" labels={labels.fileLoader} />
+        <FileLoader
+          onLoad={onLoadFile}
+          onError={onError}
+          onBrowse={onBrowseFile}
+          variant="hero"
+          labels={labels.fileLoader}
+        />
         {error && <p className="home-error">{error}</p>}
       </div>
 
