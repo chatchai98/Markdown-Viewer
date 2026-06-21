@@ -18,9 +18,11 @@ Markdown Viewer is a lightweight local-first Markdown reader and editor built wi
 - 🎨 Highlight code blocks with copy buttons.
 - ✍️ Edit loaded Markdown and save changes when the browser supports the File System Access API.
 - 🪟 Split view mode that keeps the editor and preview scroll positions in sync in both directions for real-time editing.
+- Right-click Markdown snippets for tables, checklists, code blocks, links, images, and quotes.
 - 📑 Document outline panel with scroll-spy highlighting and click-to-jump heading navigation.
 - 📖 Distraction-free Read Mode.
-- 🔎 In-document search with next/previous match navigation.
+- 🔎 `Ctrl+F` in-document find with next/previous navigation and replace controls.
+- Desktop preview support for local relative images next to opened Markdown files.
 - 🔠 Adjustable font size and line width, plus table cell wrapping, sticky table headers, and CSV export from tables.
 - 🌐 Thai and English language switching.
 - 💾 Save As fallback for browsers without direct file write support.
