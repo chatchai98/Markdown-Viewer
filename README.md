@@ -82,11 +82,37 @@ npm run preview
 
 Preview the production build locally.
 
+```bash
+npm run desktop
+```
+
+Build the web assets and launch the desktop app locally with Electron.
+
+```bash
+npm run desktop:build
+```
+
+Build Windows desktop executables into `release/`.
+
+## Desktop App
+
+The desktop build uses Electron so the app can run as a normal Windows `.exe` without starting the Vite dev server.
+
+After running `npm run desktop:build`, use:
+
+- `release/V0.3.0/Markdown Viewer Portable-0.3.0-x64.exe` for double-click, no-install usage.
+- `release/V0.3.0/Markdown Viewer Setup-0.3.0-x64.exe` for a Windows installer that can create shortcuts.
+
+Desktop open, save, and save-as actions use native Windows dialogs and write directly to local `.md`, `.markdown`, and `.txt` files.
+
 ## 🗂️ Project Structure
 
 ```text
 .
 |-- index.html
+|-- electron
+|   |-- main.cjs
+|   `-- preload.cjs
 |-- package.json
 |-- src
 |   |-- App.tsx

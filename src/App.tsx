@@ -99,7 +99,7 @@ const languageOptions: Array<{ value: Language; label: string; nativeLabel: stri
   { value: "th", label: "Thai", nativeLabel: "ไทย" },
 ];
 
-const appVersion = "0.2.0";
+const appVersion = "0.3.0";
 const githubUrl = "https://github.com/chatchai98/Markdown-Viewer";
 const appCreator = "chatchai98";
 const copyrightYear = "2026";
