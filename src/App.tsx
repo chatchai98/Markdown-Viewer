@@ -25,6 +25,7 @@ import {
   ExternalLink,
   X,
   Search,
+  Replace,
   ChevronUp,
   ChevronDown,
   ListTree,
@@ -34,6 +35,11 @@ import {
   WrapText,
   Type,
   PanelLeft,
+  ListChecks,
+  Code2,
+  Link2,
+  Image as ImageIcon,
+  Quote,
 } from "lucide-react";
 import { FileLoader } from "./components/FileLoader";
 import { MarkdownViewer } from "./components/MarkdownViewer";
@@ -77,6 +83,7 @@ type HeadingItem = {
   text: string;
   level: number;
 };
+type SnippetId = "table" | "checklist" | "code" | "link" | "image" | "quote";
 
 const themeOptions: Array<{ value: Theme; label: string; previewClass: string; group: "dark" | "pastel" }> = [
   { value: "midnight-dark", label: "Midnight", previewClass: "midnight-preview", group: "dark" },
@@ -92,7 +99,7 @@ const languageOptions: Array<{ value: Language; label: string; nativeLabel: stri
   { value: "th", label: "Thai", nativeLabel: "ไทย" },
 ];
 
-const appVersion = "0.1.0";
+const appVersion = "0.2.0";
 const githubUrl = "https://github.com/chatchai98/Markdown-Viewer";
 const appCreator = "chatchai98";
 const copyrightYear = "2026";
@@ -240,19 +247,86 @@ function extractHeadings(markdown: string): HeadingItem[] {
 
 
 function countSearchMatches(markdown: string, query: string) {
-  const trimmedQuery = query.trim().toLowerCase();
+  return getSearchMatchRanges(markdown, query).length;
+}
+
+function getSearchMatchRanges(markdown: string, query: string) {
+  const trimmedQuery = query.trim();
   if (trimmedQuery.length < 2) {
-    return 0;
+    return [];
   }
 
-  let count = 0;
-  let position = markdown.toLowerCase().indexOf(trimmedQuery);
+  const ranges: Array<{ start: number; end: number }> = [];
+  const matcher = trimmedQuery.toLowerCase();
+  const lowerMarkdown = markdown.toLowerCase();
+  let position = lowerMarkdown.indexOf(matcher);
   while (position !== -1) {
-    count += 1;
-    position = markdown.toLowerCase().indexOf(trimmedQuery, position + trimmedQuery.length);
+    ranges.push({ start: position, end: position + trimmedQuery.length });
+    position = lowerMarkdown.indexOf(matcher, position + trimmedQuery.length);
+  }
+  return ranges;
+}
+
+function replaceMarkdownMatches(markdown: string, query: string, replacement: string, activeIndex: number, all: boolean) {
+  const ranges = getSearchMatchRanges(markdown, query);
+  if (ranges.length === 0) {
+    return { markdown, replaced: 0 };
   }
 
-  return count;
+  if (!all) {
+    const range = ranges[Math.min(activeIndex, ranges.length - 1)];
+    return {
+      markdown: `${markdown.slice(0, range.start)}${replacement}${markdown.slice(range.end)}`,
+      replaced: 1,
+    };
+  }
+
+  let nextMarkdown = markdown;
+  for (const range of [...ranges].reverse()) {
+    nextMarkdown = `${nextMarkdown.slice(0, range.start)}${replacement}${nextMarkdown.slice(range.end)}`;
+  }
+  return { markdown: nextMarkdown, replaced: ranges.length };
+}
+
+function buildMarkdownSnippet(id: SnippetId, selectedText: string) {
+  const selected = selectedText.trim();
+  const fromLines = (prefix: string, fallback: string) =>
+    selected
+      ? selected.split(/\r?\n/).map((line) => `${prefix}${line}`).join("\n")
+      : fallback;
+
+  switch (id) {
+    case "table":
+      return {
+        text: "| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |",
+        selectText: "Column 1",
+      };
+    case "checklist":
+      return {
+        text: fromLines("- [ ] ", "- [ ] Task"),
+        selectText: selected ? null : "Task",
+      };
+    case "code":
+      return {
+        text: `\`\`\`js\n${selected || 'console.log("Hello");'}\n\`\`\``,
+        selectText: selected ? null : "js",
+      };
+    case "link":
+      return {
+        text: `[${selected || "link text"}](https://example.com)`,
+        selectText: selected ? "https://example.com" : "link text",
+      };
+    case "image":
+      return {
+        text: `![${selected || "alt text"}](./image.png)`,
+        selectText: selected ? "./image.png" : "alt text",
+      };
+    case "quote":
+      return {
+        text: fromLines("> ", "> Quote"),
+        selectText: selected ? null : "Quote",
+      };
+  }
 }
 
 const translations = {
@@ -339,6 +413,9 @@ const translations = {
     minRead: "min read",
     search: "Search",
     searchPlaceholder: "Find in document...",
+    replacePlaceholder: "Replace...",
+    replaceOne: "Replace",
+    replaceAll: "All",
     searchPrevious: "Previous match",
     searchNext: "Next match",
     noMatches: "No matches",
@@ -355,6 +432,13 @@ const translations = {
     stickyTables: "Sticky headers",
     markdownExtras: "Markdown Extras",
     mermaidDiagrams: "Mermaid diagrams",
+    insertMarkdown: "Insert Markdown",
+    insertTable: "Table",
+    insertChecklist: "Checklist",
+    insertCodeBlock: "Code block",
+    insertLink: "Link",
+    insertImage: "Image",
+    insertQuote: "Quote",
     previewRenderError: "Markdown preview could not render this edit.",
     previewRenderHint: "Keep editing or remove the last incomplete Markdown tag.",
     fileLoader: {
@@ -476,6 +560,16 @@ const translations = {
     modifiedUnknown: "ไม่พบเวลาแก้ไข",
     words: "คำ",
     minRead: "นาทีในการอ่าน",
+    replacePlaceholder: "แทนที่...",
+    replaceOne: "แทนที่",
+    replaceAll: "ทั้งหมด",
+    insertMarkdown: "เพิ่ม Markdown",
+    insertTable: "ตาราง",
+    insertChecklist: "Checklist",
+    insertCodeBlock: "โค้ดบล็อก",
+    insertLink: "ลิงก์",
+    insertImage: "รูปภาพ",
+    insertQuote: "คำพูด",
     fileLoader: {
       unsupportedFile: "รองรับเฉพาะไฟล์ .md, .markdown และ .txt",
       readError: "ไม่สามารถอ่านไฟล์นี้ได้",
@@ -589,6 +683,7 @@ function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [replaceQuery, setReplaceQuery] = useState("");
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [showOutline, setShowOutline] = useState(() => getStoredReaderSettings().showOutline);
   const [isReadMode, setIsReadMode] = useState(false);
@@ -598,6 +693,7 @@ function App() {
   const [stickyTables, setStickyTables] = useState(() => getStoredReaderSettings().stickyTables);
   const [mermaidEnabled, setMermaidEnabled] = useState(() => getStoredReaderSettings().mermaidEnabled);
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
+  const [snippetMenu, setSnippetMenu] = useState<{ x: number; y: number } | null>(null);
   
   const headerInputRef = useRef<HTMLInputElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
@@ -605,6 +701,7 @@ function App() {
   const splitEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const splitPreviewRef = useRef<HTMLDivElement | null>(null);
   const syncingPaneRef = useRef<HTMLElement | null>(null);
+  const editorSelectionRef = useRef<{ start: number; end: number; target: HTMLTextAreaElement } | null>(null);
   const t = {
     ...translations.en,
     ...translations[language],
@@ -617,6 +714,14 @@ function App() {
       ...translations[language].markdownViewer,
     },
   };
+  const snippetOptions: Array<{ id: SnippetId; label: string; icon: React.ReactNode }> = [
+    { id: "table", label: t.insertTable, icon: <Table2 size={14} aria-hidden="true" /> },
+    { id: "checklist", label: t.insertChecklist, icon: <ListChecks size={14} aria-hidden="true" /> },
+    { id: "code", label: t.insertCodeBlock, icon: <Code2 size={14} aria-hidden="true" /> },
+    { id: "link", label: t.insertLink, icon: <Link2 size={14} aria-hidden="true" /> },
+    { id: "image", label: t.insertImage, icon: <ImageIcon size={14} aria-hidden="true" /> },
+    { id: "quote", label: t.insertQuote, icon: <Quote size={14} aria-hidden="true" /> },
+  ];
 
   const isModified = useMemo(() => {
     if (!loadedFile) return false;
@@ -666,10 +771,8 @@ function App() {
   }, [showOutline, fontSize, lineWidth, tableWrap, stickyTables, mermaidEnabled]);
 
   useEffect(() => {
-    if (activeSearchIndex !== 0) {
-      setActiveSearchIndex(0);
-    }
-  }, [activeSearchIndex, searchQuery]);
+    setActiveSearchIndex(0);
+  }, [searchQuery]);
 
   useEffect(() => {
     const maxSearchIndex = Math.max(0, searchMatchCount - 1);
@@ -705,6 +808,9 @@ function App() {
       if (guideRef.current && !guideRef.current.contains(event.target as Node)) {
         setIsGuideOpen(false);
       }
+      if (!(event.target as Element).closest(".markdown-snippet-menu")) {
+        setSnippetMenu(null);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -720,14 +826,16 @@ function App() {
         }
       } else if ((event.ctrlKey || event.metaKey) && event.key === "f" && loadedFile) {
         event.preventDefault();
-        document.getElementById("document-search")?.focus();
+        window.setTimeout(() => document.getElementById("document-search")?.focus());
+      } else if (event.key === "Escape" && snippetMenu) {
+        setSnippetMenu(null);
       } else if (event.key === "Escape" && isReadMode) {
         setIsReadMode(false);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loadedFile, editContent, fileRef, isReadMode]);
+  }, [loadedFile, editContent, fileRef, isReadMode, snippetMenu]);
 
   useEffect(() => {
     if (!loadedFile || !fileRef) {
@@ -809,6 +917,7 @@ function App() {
     setViewMode("preview");
     setSaveStatus("idle");
     setSearchQuery("");
+    setReplaceQuery("");
     setActiveSearchIndex(0);
     setIsReadMode(false);
     setActiveHeadingId(null);
@@ -842,6 +951,7 @@ function App() {
     setViewMode("edit");
     setSaveStatus("idle");
     setSearchQuery("");
+    setReplaceQuery("");
     setActiveSearchIndex(0);
     setIsReadMode(false);
     setActiveHeadingId(null);
@@ -914,6 +1024,51 @@ function App() {
     } catch {
       setError(t.copyFailed);
     }
+  }
+
+  function openSnippetMenu(event: React.MouseEvent<HTMLTextAreaElement>) {
+    event.preventDefault();
+    const target = event.currentTarget;
+    editorSelectionRef.current = {
+      start: target.selectionStart,
+      end: target.selectionEnd,
+      target,
+    };
+    setSnippetMenu({
+      x: Math.min(event.clientX, window.innerWidth - 220),
+      y: Math.min(event.clientY, window.innerHeight - 260),
+    });
+  }
+
+  function insertSnippet(id: SnippetId) {
+    const selection = editorSelectionRef.current;
+    if (!selection) {
+      return;
+    }
+
+    const { start, end, target } = selection;
+    const value = target.value;
+    const selectedText = value.slice(start, end);
+    const snippet = buildMarkdownSnippet(id, selectedText);
+    const isBlock = id === "table" || id === "checklist" || id === "code" || id === "quote";
+    const prefix = isBlock && start > 0 && !value.slice(0, start).endsWith("\n") ? "\n" : "";
+    const suffix = isBlock && end < value.length && !value.slice(end).startsWith("\n") ? "\n" : "";
+    const insertText = `${prefix}${snippet.text}${suffix}`;
+    const nextContent = `${value.slice(0, start)}${insertText}${value.slice(end)}`;
+    const selectOffset = snippet.selectText ? insertText.indexOf(snippet.selectText) : -1;
+
+    setEditContent(nextContent);
+    setSnippetMenu(null);
+    window.setTimeout(() => {
+      target.focus();
+      if (selectOffset >= 0 && snippet.selectText) {
+        const selectionStart = start + selectOffset;
+        target.setSelectionRange(selectionStart, selectionStart + snippet.selectText.length);
+      } else {
+        const cursor = start + insertText.length;
+        target.setSelectionRange(cursor, cursor);
+      }
+    });
   }
 
   async function triggerOpenFilePicker() {
@@ -1105,6 +1260,7 @@ function App() {
     setLoadedFile(null);
     setFileRef(null);
     setSearchQuery("");
+    setReplaceQuery("");
     setIsReadMode(false);
     setActiveHeadingId(null);
   }
@@ -1117,6 +1273,16 @@ function App() {
     setActiveSearchIndex((current) =>
       (current + direction + searchMatchCount) % searchMatchCount,
     );
+  }
+
+  function replaceSearch(all = false) {
+    const result = replaceMarkdownMatches(editContent, searchQuery, replaceQuery, activeSearchIndex, all);
+    if (result.replaced === 0) {
+      return;
+    }
+
+    setEditContent(result.markdown);
+    setActiveSearchIndex(0);
   }
 
   function updateActiveHeading(scrollPane: HTMLElement) {
@@ -1201,6 +1367,7 @@ function App() {
     tableWrap,
     stickyTables,
     mermaidEnabled,
+    sourcePath: loadedFile?.path,
   };
 
   return (
@@ -1294,41 +1461,71 @@ function App() {
           {loadedFile ? (
             <>
               <div className="header-search-group">
-                <Search size={14} aria-hidden="true" />
-                <input
-                  id="document-search"
-                  type="search"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder={t.searchPlaceholder}
-                  aria-label={t.search}
-                />
-                <span className="search-count">
-                  {searchQuery.trim().length >= 2
-                    ? searchMatchCount > 0
-                      ? `${activeSearchIndex + 1}/${searchMatchCount}`
-                      : t.noMatches
-                    : ""}
-                </span>
-                <button
-                  className="btn-search-step"
-                  type="button"
-                  title={t.searchPrevious}
-                  onClick={() => moveSearch(-1)}
-                  disabled={searchMatchCount === 0}
-                >
-                  <ChevronUp size={14} aria-hidden="true" />
-                </button>
-                <button
-                  className="btn-search-step"
-                  type="button"
-                  title={t.searchNext}
-                  onClick={() => moveSearch(1)}
-                  disabled={searchMatchCount === 0}
-                >
-                  <ChevronDown size={14} aria-hidden="true" />
-                </button>
-              </div>
+                  <Search size={14} aria-hidden="true" />
+                  <input
+                    id="document-search"
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={t.searchPlaceholder}
+                    aria-label={t.search}
+                  />
+                  {searchMatchCount > 0 && (
+                    <input
+                      className="replace-input"
+                      type="text"
+                      value={replaceQuery}
+                      onChange={(event) => setReplaceQuery(event.target.value)}
+                      placeholder={t.replacePlaceholder}
+                      aria-label={t.replacePlaceholder}
+                    />
+                  )}
+                  <span className="search-count">
+                    {searchQuery.trim().length >= 2
+                      ? searchMatchCount > 0
+                        ? `${activeSearchIndex + 1}/${searchMatchCount}`
+                        : t.noMatches
+                      : ""}
+                  </span>
+                  <button
+                    className="btn-search-step"
+                    type="button"
+                    title={t.searchPrevious}
+                    onClick={() => moveSearch(-1)}
+                    disabled={searchMatchCount === 0}
+                  >
+                    <ChevronUp size={14} aria-hidden="true" />
+                  </button>
+                  <button
+                    className="btn-search-step"
+                    type="button"
+                    title={t.searchNext}
+                    onClick={() => moveSearch(1)}
+                    disabled={searchMatchCount === 0}
+                  >
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </button>
+                  {searchMatchCount > 0 && (
+                    <>
+                      <button
+                        className="btn-search-step btn-replace-one"
+                        type="button"
+                        title={t.replaceOne}
+                        onClick={() => replaceSearch(false)}
+                      >
+                        <Replace size={14} aria-hidden="true" />
+                      </button>
+                      <button
+                        className="btn-replace-all"
+                        type="button"
+                        title={t.replaceAll}
+                        onClick={() => replaceSearch(true)}
+                      >
+                        {t.replaceAll}
+                      </button>
+                    </>
+                  )}
+                </div>
 
               {/* Group 1: File Actions */}
               <div className="header-btn-group">
@@ -1552,6 +1749,7 @@ function App() {
                   className="editor-textarea"
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
+                  onContextMenu={openSnippetMenu}
                   placeholder={t.typePlaceholder}
                   spellCheck="false"
                 />
@@ -1594,6 +1792,7 @@ function App() {
                       className="editor-textarea"
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
+                      onContextMenu={openSnippetMenu}
                       onScroll={(event) => syncSplitScroll(event.currentTarget)}
                       placeholder={t.typePlaceholder}
                       spellCheck="false"
@@ -1630,6 +1829,29 @@ function App() {
           />
         )}
       </section>
+
+      {snippetMenu && (
+        <div
+          className="markdown-snippet-menu"
+          style={{ left: snippetMenu.x, top: snippetMenu.y }}
+          role="menu"
+          aria-label={t.insertMarkdown}
+        >
+          <div className="markdown-snippet-menu-title">{t.insertMarkdown}</div>
+          {snippetOptions.map((snippet) => (
+            <button
+              key={snippet.id}
+              className="markdown-snippet-option"
+              type="button"
+              role="menuitem"
+              onClick={() => insertSnippet(snippet.id)}
+            >
+              {snippet.icon}
+              <span>{snippet.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <footer className="status-bar">
         {loadedFile ? (

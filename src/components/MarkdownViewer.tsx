@@ -3,6 +3,7 @@ import {
   isValidElement,
   useEffect,
   useRef,
+  useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -31,6 +32,7 @@ type MarkdownViewerProps = {
   tableWrap?: boolean;
   stickyTables?: boolean;
   mermaidEnabled?: boolean;
+  sourcePath?: string;
   labels?: {
     blockedRemoteImage: string;
     copy: string;
@@ -46,6 +48,10 @@ type MarkdownViewerProps = {
 
 function isRemoteUrl(src: string | undefined) {
   return Boolean(src && /^https?:\/\//i.test(src));
+}
+
+function isInlineOrAbsoluteUrl(src: string | undefined) {
+  return Boolean(src && /^(data|blob|file):/i.test(src));
 }
 
 function getTableColumnCount(children: ReactNode): number {
@@ -114,6 +120,138 @@ function copyTableAsCsv(button: HTMLButtonElement) {
     .join("\n");
 }
 
+function getHtmlAttribute(attributes: string, name: string) {
+  const match = new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(attributes);
+  return match?.[1] ?? match?.[2] ?? match?.[3] ?? "";
+}
+
+function decodeBasicHtml(value: string) {
+  return value
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function escapeMarkdownAlt(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/\]/g, "\\]");
+}
+
+function htmlImagesToMarkdown(value: string) {
+  return value.replace(/<img\s+([^>]*?)\/?>/gi, (tag, attributes: string) => {
+    const src = decodeBasicHtml(getHtmlAttribute(attributes, "src"));
+    if (!src) {
+      return tag;
+    }
+
+    const alt = escapeMarkdownAlt(decodeBasicHtml(getHtmlAttribute(attributes, "alt")));
+    const width = getHtmlAttribute(attributes, "width");
+    const title = width ? ` "width=${width}"` : "";
+    return `![${alt}](<${src}>${title})`;
+  });
+}
+
+function getImageStyle(title: string | null | undefined): CSSProperties | undefined {
+  const width = /^width=([\w.%+-]+)$/i.exec(title ?? "")?.[1];
+  return width ? { width: /^\d+$/.test(width) ? `${width}px` : width, maxWidth: "100%" } : undefined;
+}
+
+function getSearchRanges(article: HTMLElement, query: string) {
+  const matcher = query.toLowerCase();
+  const ranges: Range[] = [];
+  const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.textContent?.toLowerCase().includes(matcher)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+
+      const parent = node.parentElement;
+      if (!parent || parent.closest("button, textarea, input, .code-card, .diagram-card")) {
+        return NodeFilter.FILTER_REJECT;
+      }
+
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  while (walker.nextNode()) {
+    const textNode = walker.currentNode as Text;
+    const text = textNode.textContent ?? "";
+    const lowerText = text.toLowerCase();
+    let foundAt = lowerText.indexOf(matcher);
+    while (foundAt !== -1) {
+      const range = document.createRange();
+      range.setStart(textNode, foundAt);
+      range.setEnd(textNode, foundAt + query.length);
+      ranges.push(range);
+      foundAt = lowerText.indexOf(matcher, foundAt + query.length);
+    }
+  }
+
+  return ranges;
+}
+
+function LocalMarkdownImage({
+  markdownPath,
+  src,
+  alt,
+  style,
+}: {
+  markdownPath: string;
+  src: string;
+  alt: string;
+  style?: CSSProperties;
+}) {
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let isCurrent = true;
+    setResolvedSrc(null);
+    setFailed(false);
+
+    const readAsset = window.markdownViewerDesktop?.readAsset;
+    if (!readAsset) {
+      setFailed(true);
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void readAsset(markdownPath, src)
+      .then((assetSrc) => {
+        if (!isCurrent) {
+          return;
+        }
+        if (assetSrc) {
+          setResolvedSrc(assetSrc);
+        } else {
+          setFailed(true);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setFailed(true);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [markdownPath, src]);
+
+  if (resolvedSrc) {
+    return <img src={resolvedSrc} alt={alt} style={style} />;
+  }
+
+  if (failed) {
+    return <span className="blocked-media">{alt || src}</span>;
+  }
+
+  return <span className="blocked-media">{alt || src}</span>;
+}
+
 export function MarkdownViewer({
   markdown,
   searchQuery = "",
@@ -123,6 +261,7 @@ export function MarkdownViewer({
   tableWrap = false,
   stickyTables = true,
   mermaidEnabled = true,
+  sourcePath,
   labels = {
     blockedRemoteImage: "Remote image blocked:",
     copy: "Copy",
@@ -136,97 +275,48 @@ export function MarkdownViewer({
   },
 }: MarkdownViewerProps) {
   const articleRef = useRef<HTMLElement | null>(null);
+  const normalizedMarkdown = htmlImagesToMarkdown(markdown);
 
   useEffect(() => {
     const article = articleRef.current;
     const query = searchQuery.trim();
-    if (!article) {
+    const highlightApi = CSS as typeof CSS & {
+      highlights?: Map<string, Highlight>;
+    };
+    highlightApi.highlights?.delete("markdown-search");
+    highlightApi.highlights?.delete("markdown-search-active");
+    if (!article || query.length < 2 || !highlightApi.highlights || typeof Highlight === "undefined") {
       return;
     }
 
     try {
-      article.querySelectorAll(".search-mark").forEach((mark) => {
-        mark.replaceWith(document.createTextNode(mark.textContent ?? ""));
-      });
-      article.normalize();
-
-      if (query.length < 2) {
-        return;
-      }
-
-      const matcher = query.toLowerCase();
-      const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-          if (!node.textContent?.toLowerCase().includes(matcher)) {
-            return NodeFilter.FILTER_REJECT;
+      const ranges = getSearchRanges(article, query);
+      const activeRange = ranges[activeSearchIndex];
+      const inactiveRanges = ranges.filter((_, index) => index !== activeSearchIndex);
+      highlightApi.highlights.set("markdown-search", new Highlight(...inactiveRanges));
+      if (activeRange) {
+        highlightApi.highlights.set("markdown-search-active", new Highlight(activeRange));
+        const rect = activeRange.getBoundingClientRect();
+        if (rect.width || rect.height) {
+          const scrollPane = article.closest<HTMLElement>(".viewer-content, .preview-pane");
+          if (scrollPane) {
+            const paneRect = scrollPane.getBoundingClientRect();
+            scrollPane.scrollTo({
+              top: scrollPane.scrollTop + rect.top - paneRect.top - scrollPane.clientHeight / 3,
+              behavior: "smooth",
+            });
           }
-
-          const parent = node.parentElement;
-          if (!parent || parent.closest("button, textarea, input, .code-card, .diagram-card")) {
-            return NodeFilter.FILTER_REJECT;
-          }
-
-          return NodeFilter.FILTER_ACCEPT;
-        },
-      });
-
-      const textNodes: Text[] = [];
-      while (walker.nextNode()) {
-        textNodes.push(walker.currentNode as Text);
-      }
-
-      let matchIndex = 0;
-      for (const textNode of textNodes) {
-        if (!textNode.parentNode) {
-          continue;
         }
-
-        const text = textNode.textContent ?? "";
-        const fragment = document.createDocumentFragment();
-        let cursor = 0;
-        const lowerText = text.toLowerCase();
-        let foundAt = lowerText.indexOf(matcher);
-
-        while (foundAt !== -1) {
-          if (foundAt > cursor) {
-            fragment.append(text.slice(cursor, foundAt));
-          }
-
-          const mark = document.createElement("mark");
-          mark.className = "search-mark";
-          mark.dataset.searchIndex = String(matchIndex);
-          mark.textContent = text.slice(foundAt, foundAt + query.length);
-          fragment.append(mark);
-          matchIndex += 1;
-          cursor = foundAt + query.length;
-          foundAt = lowerText.indexOf(matcher, cursor);
-        }
-
-        if (cursor < text.length) {
-          fragment.append(text.slice(cursor));
-        }
-
-        textNode.parentNode.replaceChild(fragment, textNode);
       }
     } catch (error) {
       console.warn("Search highlighting failed", error);
     }
-  }, [markdown, searchQuery]);
 
-  useEffect(() => {
-    const article = articleRef.current;
-    if (!article || !searchQuery.trim()) {
-      return;
-    }
-
-    const marks = Array.from(article.querySelectorAll<HTMLElement>(".search-mark"));
-    marks.forEach((mark) => mark.classList.remove("active"));
-    const activeMark = marks[activeSearchIndex];
-    if (activeMark) {
-      activeMark.classList.add("active");
-      activeMark.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-    }
-  }, [activeSearchIndex, searchQuery]);
+    return () => {
+      highlightApi.highlights?.delete("markdown-search");
+      highlightApi.highlights?.delete("markdown-search-active");
+    };
+  }, [activeSearchIndex, normalizedMarkdown, searchQuery]);
 
   const articleStyle = {
     "--markdown-font-size": `${fontSize}px`,
@@ -319,7 +409,7 @@ export function MarkdownViewer({
               </code>
             );
           },
-          img({ src, alt }) {
+          img({ src, alt, title }) {
             if (isRemoteUrl(src)) {
               return (
                 <span className="blocked-media">
@@ -328,7 +418,12 @@ export function MarkdownViewer({
               );
             }
 
-            return <img src={src} alt={alt ?? ""} />;
+            const imageStyle = getImageStyle(title);
+            if (sourcePath && src && !isInlineOrAbsoluteUrl(src)) {
+              return <LocalMarkdownImage markdownPath={sourcePath} src={src} alt={alt ?? ""} style={imageStyle} />;
+            }
+
+            return <img src={src} alt={alt ?? ""} style={imageStyle} />;
           },
           a({ href, children }) {
             return (
@@ -367,7 +462,7 @@ export function MarkdownViewer({
           },
         }}
       >
-        {markdown}
+        {normalizedMarkdown}
       </ReactMarkdown>
     </article>
   );
