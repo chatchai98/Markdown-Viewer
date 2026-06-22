@@ -50,8 +50,8 @@ function isRemoteUrl(src: string | undefined) {
   return Boolean(src && /^https?:\/\//i.test(src));
 }
 
-function isInlineOrAbsoluteUrl(src: string | undefined) {
-  return Boolean(src && /^(data|blob|file):/i.test(src));
+function isEmbeddedUrl(src: string | undefined) {
+  return Boolean(src && /^(data|blob):/i.test(src));
 }
 
 function getTableColumnCount(children: ReactNode): number {
@@ -419,7 +419,7 @@ export function MarkdownViewer({
             }
 
             const imageStyle = getImageStyle(title);
-            if (sourcePath && src && !isInlineOrAbsoluteUrl(src)) {
+            if (sourcePath && src && !isEmbeddedUrl(src)) {
               return <LocalMarkdownImage markdownPath={sourcePath} src={src} alt={alt ?? ""} style={imageStyle} />;
             }
 

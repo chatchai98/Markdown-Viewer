@@ -1,8 +1,9 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } = require("electron");
 const fs = require("fs/promises");
 const path = require("path");
-const { pathToFileURL } = require("url");
+const { fileURLToPath, pathToFileURL } = require("url");
 
+const appId = "com.chatchai98.markdownviewer";
 const acceptedExtensions = new Set([".md", ".markdown", ".txt"]);
 const imageMimeTypes = new Map([
   [".avif", "image/avif"],
@@ -18,11 +19,18 @@ const imageMimeTypes = new Map([
 const maxAssetBytes = 20 * 1024 * 1024;
 const appRoot = path.join(__dirname, "..");
 const distIndex = path.join(appRoot, "dist", "index.html");
-const appIcon = path.join(appRoot, "assets", "icon.ico");
+const appIcon = app.isPackaged
+  ? path.join(process.resourcesPath, "icon.ico")
+  : path.join(appRoot, "assets", "icon.ico");
 const devServerArg = process.argv.find((arg) => arg.startsWith("--dev-server="));
 const devServerUrl = devServerArg?.slice("--dev-server=".length);
 
+if (process.platform === "win32") {
+  app.setAppUserModelId(appId);
+}
+
 function createWindow() {
+  const windowIcon = nativeImage.createFromPath(appIcon);
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -30,7 +38,7 @@ function createWindow() {
     minHeight: 620,
     show: false,
     title: "Markdown Viewer",
-    icon: appIcon,
+    icon: windowIcon.isEmpty() ? appIcon : windowIcon,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -40,6 +48,9 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
+    if (!windowIcon.isEmpty()) {
+      mainWindow.setIcon(windowIcon);
+    }
     mainWindow.show();
   });
 
@@ -167,7 +178,7 @@ async function readMarkdownAsset(markdownPath, assetSrc) {
   const cleanedSrc = assetSrc.split(/[?#]/, 1)[0];
   let decodedSrc;
   try {
-    decodedSrc = decodeURIComponent(cleanedSrc);
+    decodedSrc = /^file:/i.test(cleanedSrc) ? fileURLToPath(cleanedSrc) : decodeURIComponent(cleanedSrc);
   } catch {
     decodedSrc = cleanedSrc;
   }

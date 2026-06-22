@@ -1,7 +1,7 @@
 {
   "name": "markdown-viewer",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A local-first Markdown reader and editor packaged for web and desktop.",
   "author": "Chatchai.j <chatchai.j98@gmail.com>",
   "license": "MIT",
@@ -19,7 +19,7 @@
     "appId": "com.chatchai98.markdownviewer",
     "productName": "Markdown Viewer",
     "directories": {
-      "output": "release/V0.3.0"
+      "output": "release/V0.3.1"
     },
     "files": [
       "dist/**/*",
@@ -34,6 +34,12 @@
         "portable"
       ]
     },
+    "extraResources": [
+      {
+        "from": "assets/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
     "nsis": {
       "artifactName": "${productName} Setup-${version}-${arch}.${ext}",
       "oneClick": false,
